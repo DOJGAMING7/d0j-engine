@@ -20,6 +20,7 @@
         if (b) { b.classList.remove('hidden'); b.textContent = 'D0J ENGINE: ' + msg }
       }
       window.addEventListener('error', function (e) { window.__d0jShowError(e.message || 'boot error') })
+      window.addEventListener('unhandledrejection', function (e) { window.__d0jShowError((e.reason && e.reason.message) || String(e.reason || 'startup error')) })
     </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>

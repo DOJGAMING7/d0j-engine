@@ -1,4 +1,4 @@
-# D0J EnGine v2
+# D0J EnGine v2.0.1
 
 Private, single-user Android client styled after the Snake Engine shell/layout language, rebuilt with a bright green and black theme. No seller panel, no licence server, no device binding, no premium gates, no orders and no payments.
 
@@ -21,6 +21,8 @@ Private, single-user Android client styled after the Snake Engine shell/layout l
 - Ratimoda v2.1 state-machine autoplay test on the simulated bridge.
 - `prediction-lines.js` 3-shot prediction test and a playable line-prediction demo table.
 - GitHub OTA UI bundle updates, SHA-256 verification, rollback and update history.
+  - Auto-check is OFF by default. Use Settings → `UI Updates` → `Check` / `Download & Apply`.
+  - Existing broken `v2.0.0` cached bundles are cleared automatically on first launch of `v2.0.1`.
 - No server. All features run inside the APK.
 
 ## Honest scope

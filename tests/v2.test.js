@@ -92,3 +92,35 @@ test('script manifest hashes match shipped scripts', () => {
     assert.equal(entry.hash, hash, `${entry.id} hash mismatch`)
   }
 })
+
+test('OTA gate cannot recurse into a cached UI iframe', () => {
+  const gate = read('src/components/BundleGate.jsx')
+  const storage = read('src/lib/storage.js')
+
+  assert.ok(gate.includes('isEmbeddedUi()'))
+  assert.ok(gate.includes('rollbackBundle()'))
+  assert.ok(gate.includes('MIGRATION_VERSION'))
+  assert.ok(gate.includes('setPref(KEYS.migration, MIGRATION_VERSION)'))
+  assert.ok(gate.includes('ui=cache'))
+
+  assert.ok(storage.includes('export const MIGRATION_VERSION = 2'))
+  assert.ok(storage.includes('checkOnLaunch: false'))
+  assert.ok(storage.includes('export function isEmbeddedUi()'))
+  assert.ok(storage.includes('window.self !== window.top'))
+  assert.ok(storage.includes("get('ui') === 'cache'"))
+})
+
+test('release version is bumped to 2.0.1', () => {
+  const pkg = JSON.parse(read('package.json'))
+  assert.equal(pkg.version, '2.0.1')
+
+  const gradle = read('android/app/build.gradle')
+  assert.ok(gradle.includes('versionCode 4'))
+  assert.ok(gradle.includes('versionName "2.0.1"'))
+
+  const settings = read('src/screens/Settings.jsx')
+  assert.ok(settings.includes('v2.0.1'))
+
+  const workflow = read('.github/workflows/build-apk.yml')
+  assert.ok(workflow.includes('tag_name: v2.0.1-${{ github.run_number }}'))
+})

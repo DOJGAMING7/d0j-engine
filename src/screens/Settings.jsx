@@ -125,7 +125,7 @@ export default function Settings({
 
         <section className="panel">
           <h2>Build Info</h2>
-          <div className="meta-line">D0J EnGine · v2.0.0 · private single-user build</div>
+          <div className="meta-line">D0J EnGine · v2.0.1 · private single-user build</div>
           <div className="meta-line">Target reference: 8 Ball Pool {TARGET_BUILD}</div>
           <div className="meta-line">No seller · no licence · no device binding · local APK pass only</div>
           <div className="meta-line">State offsets/RVAs: <b>UNSET</b></div>
