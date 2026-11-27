@@ -2,7 +2,7 @@
   "version": "1.1.0",
   "date": "2026-11-27",
   "bundle": "ui-bundle.zip",
-  "sha256": "e3af5e14c5ce2fa1f01ec0155a4d81bc82c998c53005a8e23267d510cec7a731",
+  "sha256": "50553cdce252c2c2ee36093f684f07c886f79233569cae76a5665e8560210399",
   "notes": [
     "Initial D0J EnGine shell",
     "Auto Play + Auto Queue mod menu",
