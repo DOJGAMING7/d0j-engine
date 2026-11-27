@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import Logo from '../components/Logo.jsx'
 import { checkAndUpdateBundle, getBundleMeta, rollbackBundle } from '../lib/updater.js'
 
-export default function Settings({ settings, saveSettings, bundleStatus, onBack, onRunScript, runningScript, scriptLog, onClearLog }) {
+export default function Settings({ settings, saveSettings, bundleStatus, onBack, onRunScript, runningScript, onRunLineScript, runningLineScript, scriptLog, onClearLog }) {
   const [url, setUrl] = useState(settings.updateUrl || '')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -73,6 +73,10 @@ export default function Settings({ settings, saveSettings, bundleStatus, onBack,
             <div><b>autoplay-ratimoda.js</b><small>8 Ball Pool 56.34.0 · v2.0.0 · state machine</small></div>
             <button className="btn primary" disabled={runningScript} onClick={onRunScript}>{runningScript ? 'Running…' : 'Run test'}</button>
           </div>
+          <div className="script-row">
+            <div><b>prediction-lines.js</b><small>3-shot prediction guide test · local engine</small></div>
+            <button className="btn primary" disabled={runningLineScript} onClick={onRunLineScript}>{runningLineScript ? 'Running…' : 'Run test'}</button>
+          </div>
           <div className="log-box">
             {scriptLog.length ? scriptLog.slice(-12).map((l, i) => <div key={i}>[{new Date(l.at).toLocaleTimeString()}] {l.msg}</div>) : <div className="muted">No script output yet.</div>}
           </div>
@@ -81,7 +85,7 @@ export default function Settings({ settings, saveSettings, bundleStatus, onBack,
 
         <section className="panel">
           <h2>Build Info</h2>
-          <div className="meta-line">D0J EnGine · v1.1.0 · private single-user build</div>
+          <div className="meta-line">D0J EnGine · v1.2.0 · private single-user build</div>
           <div className="meta-line">Target reference: 8 Ball Pool 56.34.0</div>
           <div className="meta-line">No seller · no key · no licence · no device binding</div>
           <div className="meta-line">State offsets/RVAs: <b>UNSET</b></div>

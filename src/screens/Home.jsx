@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import Logo from '../components/Logo.jsx'
 import ModMenu from '../components/ModMenu.jsx'
 
-export default function Home({ config, setConfig, state, bundleStatus, onOpenSettings, onRunScript, runningScript, onPlay }) {
+export default function Home({ config, setConfig, state, bundleStatus, onOpenSettings, onRunScript, runningScript, onPlay, onOpenTable, onRunLineScript }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const status = config.autoPlay ? 'AUTO PLAY' : 'READY'
 
@@ -34,6 +34,7 @@ export default function Home({ config, setConfig, state, bundleStatus, onOpenSet
         </button>
 
         <button className="menu-btn" onClick={() => setMenuOpen(true)}>OPEN MOD MENU</button>
+        <button className="menu-btn green" onClick={onOpenTable}>LINE PREDICTION TEST</button>
       </section>
 
       <footer className="footer-readout">
@@ -50,6 +51,8 @@ export default function Home({ config, setConfig, state, bundleStatus, onOpenSet
           state={state}
           onRunScript={onRunScript}
           runningScript={runningScript}
+          onOpenTable={onOpenTable}
+          onRunLineScript={onRunLineScript}
           onClose={() => setMenuOpen(false)}
         />
       )}

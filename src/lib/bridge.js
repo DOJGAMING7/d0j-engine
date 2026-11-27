@@ -1,3 +1,5 @@
+import { applyPrediction, cloneTable, computePrediction, createDefaultTable } from './prediction.js'
+
 const DEFAULT_STATE = {
   ready: true,
   phase: 'YOUR_TURN',
@@ -8,6 +10,8 @@ const DEFAULT_STATE = {
   aimError: 0,
   manualInput: false,
   status: 'SIMULATED',
+  table: createDefaultTable(),
+  lastPrediction: null,
   queue: { mode: 'ONE', delay: 2, jitter: 0.4, retries: 2, limit: 3, queued: 0, matched: 0, completed: 0, failed: 0 }
 }
 
@@ -27,15 +31,29 @@ let config = {
   guideOpacity: 70,
   power: 74,
   sideSpin: 0,
-  topSpin: 0
+  topSpin: 0,
+  showLines: true,
+  keepLines: true,
+  powerLock: false,
+  lineSpin: 0,
+  lineOpacity: 85
 }
 let listeners = new Set()
 let stopped = false
 let simTimer = null
 
+function cloneState(s) {
+  return {
+    ...s,
+    queue: { ...s.queue },
+    table: cloneTable(s.table)
+  }
+}
+
 function emit() {
+  const snapshot = cloneState(state)
   for (const fn of [...listeners]) {
-    try { fn({ ...state, queue: { ...state.queue } }) } catch {}
+    try { fn(snapshot) } catch {}
   }
 }
 
@@ -48,7 +66,7 @@ export function createBridge({ onLog = () => {} } = {}) {
 
   const api = {
     async getState() {
-      return { ...state, queue: { ...state.queue } }
+      return cloneState(state)
     },
     async getConfig() {
       return { ...config }
@@ -69,9 +87,14 @@ export function createBridge({ onLog = () => {} } = {}) {
       return { ...config }
     },
     async setState(patch = {}) {
-      state = { ...state, ...patch, queue: { ...(patch.queue || state.queue) } }
+      state = {
+        ...state,
+        ...patch,
+        queue: { ...(patch.queue || state.queue) },
+        table: patch.table ? cloneTable(patch.table) : state.table
+      }
       emit()
-      return { ...state }
+      return cloneState(state)
     },
     subscribe(fn) {
       listeners.add(fn)
@@ -111,6 +134,32 @@ export function createBridge({ onLog = () => {} } = {}) {
       emit()
       log(`tap ${Math.round(x)},${Math.round(y)} delay=${Math.round(delay)}ms`)
       return { x, y, delay }
+    },
+    async predict(options = {}) {
+      const spin = Number(options.spin ?? config.lineSpin ?? 0)
+      const power = Number(options.power ?? config.power ?? 74)
+      const prediction = computePrediction(state.table, options.aim || options, { spin, power })
+      state.lastPrediction = {
+        ...prediction,
+        cuePath: undefined,
+        targetPath: undefined
+      }
+      return prediction
+    },
+    async shoot(options = {}) {
+      if (stopped) throw new Error('stopped')
+      const spin = Number(options.spin ?? config.lineSpin ?? 0)
+      const power = Number(options.power ?? config.power ?? 74)
+      const prediction = await api.predict({ ...options, spin, power })
+      state.table = applyPrediction(state.table, prediction, { power })
+      state.phase = 'OPPONENT_TURN'
+      state.turn = 'opponent'
+      state.result = prediction.pocket && prediction.target
+        ? `pot:${prediction.target.id}:${prediction.pocket.id}`
+        : 'miss'
+      emit()
+      log(`predict ${prediction.target?.id || 'none'} -> ${prediction.pocket?.id || 'none'} power=${power} spin=${spin}`)
+      return prediction
     },
     async swipe(x1, y1, x2, y2, duration = 120) {
       if (stopped) throw new Error('stopped')
@@ -157,7 +206,12 @@ export function createBridge({ onLog = () => {} } = {}) {
 
   function reset() {
     stopped = false
-    state = { ...DEFAULT_STATE, queue: { ...DEFAULT_STATE.queue } }
+    state = {
+      ...DEFAULT_STATE,
+      queue: { ...DEFAULT_STATE.queue },
+      table: createDefaultTable(),
+      lastPrediction: null
+    }
     emit()
   }
 

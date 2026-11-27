@@ -9,6 +9,7 @@ Private, single-user Android client styled after the Snake Engine launcher shell
 - In-app mod menu: `AUTO PLAY`, `AUTO QUEUE`, `AIM`, `CONTROLS`, `TABLE`.
 - Settings with GitHub URL OTA UI bundle updates, rollback, update history, and script runner log.
 - Ratimoda autoplay test script running on a **simulated bridge**.
+- Line-prediction demo table with draggable aim, ghost ball, target line, pocket prediction, spin curve and `SHOW LINES` / `KEEP LINES AFTER SHOT` controls.
 - All build-dependent offsets/RVAs are deliberately `UNSET` until measured on 8 Ball Pool 56.34.0.
 
 > This build does not attach to a game process yet. The bridge is a deterministic simulator used to validate UI, menu state, and script flow.
@@ -45,6 +46,7 @@ Scripts live in `public/scripts/` and are copied into the OTA bundle.
 Current script:
 
 - `autoplay-ratimoda.js` — v2 state-machine autoplay test: waits for `YOUR_TURN`, takes 3 correction-aimed shots, handles `OPPONENT_TURN`/`RESULT`, retries timeouts, re-queues, then stops cleanly.
+- `prediction-lines.js` — 3-shot line-prediction test using the local geometry engine (`cuePath`, ghost ball, target line, pocket pick).
 
 Runner API:
 

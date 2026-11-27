@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 
-const TABS = ['AUTO PLAY', 'AUTO QUEUE', 'AIM', 'CONTROLS', 'TABLE']
+const TABS = ['AUTO PLAY', 'AUTO QUEUE', 'AIM', 'CONTROLS', 'TABLE', 'LINES']
 
 function Toggle({ checked, onChange, label, hint }) {
   return (
@@ -11,11 +11,11 @@ function Toggle({ checked, onChange, label, hint }) {
   )
 }
 
-function Slider({ label, value, min, max, step = 1, unit = '', onChange }) {
+function Slider({ label, value, min, max, step = 1, unit = '', disabled = false, onChange }) {
   return (
-    <label className="slider-row">
+    <label className={`slider-row ${disabled ? 'disabled' : ''}`}>
       <span className="slider-head"><b>{label}</b><em>{value}{unit}</em></span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} />
+      <input type="range" min={min} max={max} step={step} value={value} disabled={disabled} onChange={e => onChange(Number(e.target.value))} />
     </label>
   )
 }
@@ -28,7 +28,7 @@ function Chips({ options, value, onChange }) {
   )
 }
 
-export default function ModMenu({ config, setConfig, state, onRunScript, runningScript, onClose }) {
+export default function ModMenu({ config, setConfig, state, onRunScript, runningScript, onOpenTable, onRunLineScript, onClose }) {
   const [tab, setTab] = useState('AUTO PLAY')
   const c = config
   const set = patch => setConfig(patch)
@@ -78,7 +78,7 @@ export default function ModMenu({ config, setConfig, state, onRunScript, running
             <Toggle checked={c.targetPreview} onChange={v => set({ targetPreview: v })} label="Target preview" />
             <Slider label="Guide opacity" value={c.guideOpacity} min={10} max={100} unit="%" onChange={v => set({ guideOpacity: v })} />
             <div className="guide-preview" style={{ opacity: c.guideOpacity / 100 }}><i /></div>
-            <p className="note">Guide colour: #00E6A6 → #00C8FF.</p>
+            <p className="note">Guide colour: #39FF14 → #00E676 on the demo table.</p>
           </div>
         )}
 
@@ -101,6 +101,20 @@ export default function ModMenu({ config, setConfig, state, onRunScript, running
             <div className="readout-line"><span>Power</span><b>{state.power}%</b></div>
             <div className="readout-line"><span>Queue</span><b>{c.queueMode}</b></div>
             <p className="note">All offsets/RVAs remain unset until measured on the pinned build.</p>
+          </div>
+        )}
+
+        {tab === 'LINES' && (
+          <div className="card-list">
+            <Toggle checked={c.showLines !== false} onChange={v => set({ showLines: v })} label="Show lines" hint="Prediction guide on the demo table" />
+            <Toggle checked={c.keepLines !== false} onChange={v => set({ keepLines: v })} label="Keep lines after shot" />
+            <Toggle checked={c.powerLock === true} onChange={v => set({ powerLock: v })} label="Power lock" />
+            <Slider label="Default power" value={c.power} min={0} max={100} unit="%" disabled={c.powerLock} onChange={v => set({ power: v })} />
+            <Slider label="Spin" value={c.lineSpin ?? 0} min={-1} max={1} step={0.05} onChange={v => set({ lineSpin: v, sideSpin: v })} />
+            <Slider label="Line opacity" value={c.lineOpacity ?? 85} min={10} max={100} unit="%" onChange={v => set({ lineOpacity: v })} />
+            <button className="btn primary wide" onClick={onOpenTable}>Open Line Prediction Test</button>
+            <button className="btn ghost wide" disabled={runningScript} onClick={onRunLineScript}>{runningScript ? 'Running test…' : 'Run 3-Shot Line Script'}</button>
+            <p className="note">Uses the local prediction engine. No server, no game memory.</p>
           </div>
         )}
       </div>

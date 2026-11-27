@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import BundleGate from './components/BundleGate.jsx'
 import Home from './screens/Home.jsx'
 import Settings from './screens/Settings.jsx'
+import TableDemo from './screens/TableDemo.jsx'
 import { createBridge } from './lib/bridge.js'
 import { loadScriptSource, runScriptSource } from './lib/scriptRunner.js'
 import { getPref, setPref, loadSettings, saveSettings as persistSettings } from './lib/storage.js'
@@ -22,7 +23,12 @@ const DEFAULT_CONFIG = {
   guideOpacity: 70,
   power: 74,
   sideSpin: 0,
-  topSpin: 0
+  topSpin: 0,
+  showLines: true,
+  keepLines: true,
+  powerLock: false,
+  lineSpin: 0,
+  lineOpacity: 85
 }
 
 function Main() {
@@ -33,6 +39,7 @@ function Main() {
   const [bundleStatus, setBundleStatus] = useState(null)
   const [scriptLog, setScriptLog] = useState([])
   const [runningScript, setRunningScript] = useState(false)
+  const [runningLineScript, setRunningLineScript] = useState(false)
   const bridgeRef = useRef(null)
 
   if (!bridgeRef.current) {
@@ -46,6 +53,7 @@ function Main() {
     const stored = getPref('config', {})
     if (stored && typeof stored === 'object') setConfigState(prev => ({ ...prev, ...stored }))
     getBundleMeta().then(setBundleStatus).catch(() => {})
+    bridge.getState().then(setLiveState).catch(() => {})
     return bridge.subscribe(s => setLiveState(s))
   }, [bridge])
 
@@ -85,6 +93,35 @@ function Main() {
     }
   }
 
+  const runLineTest = async () => {
+    setRunningLineScript(true)
+    try {
+      bridge.reset()
+      await bridge.setConfig(config)
+      const source = await loadScriptSource('prediction-lines.js')
+      await runScriptSource(source, bridge.api, bridge.log)
+      const finalConfig = await bridge.getConfig()
+      setConfigState(prev => ({ ...prev, ...finalConfig }))
+    } catch (e) {
+      bridge.log(`LINE TEST ERROR: ${e?.message || e}`)
+    } finally {
+      setRunningLineScript(false)
+    }
+  }
+
+  if (tab === 'table') {
+    return (
+      <TableDemo
+        config={config}
+        setConfig={setConfig}
+        state={liveState}
+        bridge={bridge}
+        onBack={() => setTab('home')}
+        onLog={bridge.log}
+      />
+    )
+  }
+
   if (tab === 'settings') {
     return (
       <Settings
@@ -94,6 +131,8 @@ function Main() {
         onBack={() => setTab('home')}
         onRunScript={runRatimoda}
         runningScript={runningScript}
+        onRunLineScript={runLineTest}
+        runningLineScript={runningLineScript}
         scriptLog={scriptLog}
         onClearLog={() => setScriptLog([])}
       />
@@ -110,6 +149,8 @@ function Main() {
       onRunScript={runRatimoda}
       runningScript={runningScript}
       onPlay={handlePlay}
+      onOpenTable={() => setTab('table')}
+      onRunLineScript={runLineTest}
     />
   )
 }
