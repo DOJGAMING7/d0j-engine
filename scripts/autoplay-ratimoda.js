@@ -1,9 +1,19 @@
 export default async function autoplayRatimoda(api, log) {
   const cfg = await api.getConfig().catch(() => ({}))
 
+  const MODE_ALIASES = {
+    'Pro Fast': 'Fast',
+    'Fast Mode': 'Fast',
+    'Pro Player': 'Human',
+    Fast: 'Fast',
+    Slow: 'Slow',
+    Human: 'Human'
+  }
+  const requestedMode = cfg.autoPlayMode || cfg.mode || 'Pro Fast'
+
   const options = {
     shots: 3,
-    mode: ['Slow', 'Fast', 'Human'].includes(cfg.mode) ? cfg.mode : 'Human',
+    mode: MODE_ALIASES[requestedMode] || 'Human',
     autoQueue: true,
     stopOnManual: cfg.stopOnManual !== false,
     seed: 73421,

@@ -31,6 +31,7 @@ jobs:
         run: |
           test -f dist/index.html
           test -f dist/scripts/autoplay-ratimoda.js
+          test -f dist/scripts/prediction-lines.js
           node --check dist/assets/*.js
       - name: Sync Capacitor
         run: npx cap sync android
@@ -50,8 +51,8 @@ jobs:
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0-${{ github.run_number }}
-          name: D0J EnGine v1.0.0-${{ github.run_number }}
+          tag_name: v2.0.0-${{ github.run_number }}
+          name: D0J EnGine v2.0.0-${{ github.run_number }}
           files: out/D0J-ENGINE-V1.apk
           generate_release_notes: true
           prerelease: true

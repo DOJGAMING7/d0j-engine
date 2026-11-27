@@ -1,12 +1,13 @@
 {
-  "version": "1.2.0",
+  "version": "2.0.0",
   "date": "2026-11-27",
   "bundle": "ui-bundle.zip",
-  "sha256": "d2a6e6fdedcfb6c2a0f3c72b0e088530f406a47bba4db814f63e904fcc2033a6",
+  "sha256": "c6561096f1c2e7cc81d44f990cade0e1852198e1b7f03f5403259a3958c97fdb",
   "notes": [
-    "Initial D0J EnGine shell",
-    "Auto Play + Auto Queue mod menu",
-    "Ratimoda autoplay test script",
-    "GitHub URL OTA UI updates"
+    "HOME MENU layout with supported games and 8BP redirect",
+    "Bright green/black reference-matched mod menu",
+    "Draggable floating D0J overlay and purchase guard",
+    "APK PASS with salted hash",
+    "Ratimoda v2.1 autoplay and local line prediction"
   ]
 }

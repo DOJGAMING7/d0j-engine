@@ -7,7 +7,7 @@ export const KEYS = {
 }
 
 export const DEFAULT_SETTINGS = {
-  updateUrl: '',
+  updateUrl: 'https://raw.githubusercontent.com/DOJGAMING7/d0j-engine/main/updates',
   updateLocked: false,
   checkOnLaunch: true,
   updateLog: [],

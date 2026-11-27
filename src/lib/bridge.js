@@ -1,3 +1,4 @@
+import { DEFAULT_CONFIG, normalizeMode } from './config.js'
 import { applyPrediction, cloneTable, computePrediction, createDefaultTable } from './prediction.js'
 
 const DEFAULT_STATE = {
@@ -16,28 +17,7 @@ const DEFAULT_STATE = {
 }
 
 let state = { ...DEFAULT_STATE, queue: { ...DEFAULT_STATE.queue } }
-let config = {
-  autoPlay: false,
-  mode: 'Slow',
-  autoQueue: false,
-  queueMode: 'ONE',
-  matchLimit: 3,
-  queueDelay: 2,
-  jitter: 0.4,
-  retries: 2,
-  stopOnManual: true,
-  aimGuide: false,
-  targetPreview: false,
-  guideOpacity: 70,
-  power: 74,
-  sideSpin: 0,
-  topSpin: 0,
-  showLines: true,
-  keepLines: true,
-  powerLock: false,
-  lineSpin: 0,
-  lineOpacity: 85
-}
+let config = { ...DEFAULT_CONFIG }
 let listeners = new Set()
 let stopped = false
 let simTimer = null
@@ -72,7 +52,9 @@ export function createBridge({ onLog = () => {} } = {}) {
       return { ...config }
     },
     async setConfig(patch = {}) {
-      config = { ...config, ...patch }
+      const nextPatch = { ...patch }
+      if (nextPatch.autoPlayMode && !nextPatch.mode) nextPatch.mode = normalizeMode(nextPatch.autoPlayMode)
+      config = { ...config, ...nextPatch }
       state.power = config.power ?? state.power
       state.spin = config.sideSpin ?? state.spin
       state.queue = {

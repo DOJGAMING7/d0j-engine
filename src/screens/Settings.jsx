@@ -1,8 +1,26 @@
 import React, { useState } from 'react'
 import Logo from '../components/Logo.jsx'
-import { checkAndUpdateBundle, getBundleMeta, rollbackBundle } from '../lib/updater.js'
+import { checkAndUpdateBundle, rollbackBundle } from '../lib/updater.js'
+import { GAME_PACKAGES, TARGET_BUILD } from '../lib/config.js'
 
-export default function Settings({ settings, saveSettings, bundleStatus, onBack, onRunScript, runningScript, onRunLineScript, runningLineScript, scriptLog, onClearLog }) {
+export default function Settings({
+  settings,
+  saveSettings,
+  bundleStatus,
+  nativeStatus,
+  onBack,
+  onRunScript,
+  runningScript,
+  onRunLineScript,
+  runningLineScript,
+  scriptLog,
+  onClearLog,
+  onLaunchGame,
+  onRequestOverlay,
+  onToggleFloating,
+  onRequestAccessibility,
+  onLockApp
+}) {
   const [url, setUrl] = useState(settings.updateUrl || '')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -47,6 +65,28 @@ export default function Settings({ settings, saveSettings, bundleStatus, onBack,
 
       <div className="settings-body">
         <section className="panel">
+          <h2>NATIVE CONTROLS</h2>
+          <p>All actions run locally in the APK. No command server and no data upload.</p>
+          <div className="script-row">
+            <div><b>Launch 8 Ball Pool</b><small>{GAME_PACKAGES.eightBallPool} · {TARGET_BUILD}</small></div>
+            <button className="btn primary" onClick={() => onLaunchGame(GAME_PACKAGES.eightBallPool)}>Launch</button>
+          </div>
+          <div className="script-row">
+            <div><b>Display over other apps</b><small>{nativeStatus?.overlay ? 'GRANTED' : 'Permission not granted'}</small></div>
+            <button className="btn ghost" onClick={onRequestOverlay}>Open</button>
+          </div>
+          <div className="script-row">
+            <div><b>Floating D0J button</b><small>Draggable · tap opens mod menu · {nativeStatus?.floating ? 'ON' : 'OFF'}</small></div>
+            <button className="btn primary" disabled={!nativeStatus?.overlay} onClick={onToggleFloating}>{nativeStatus?.floating ? 'Stop' : 'Start'}</button>
+          </div>
+          <div className="script-row">
+            <div><b>Purchase guard</b><small>{nativeStatus?.accessibility ? 'Accessibility ON' : 'Enable accessibility to auto-BACK'}</small></div>
+            <button className="btn ghost" onClick={onRequestAccessibility}>Open</button>
+          </div>
+          <button className="btn ghost wide" onClick={onLockApp}>Lock app again (APK PASS)</button>
+        </section>
+
+        <section className="panel">
           <h2>UI Updates</h2>
           <p>OTA UI bundle from your GitHub URL. No APK download needed for UI changes.</p>
           <label className="field-label">GitHub raw / Pages URL</label>
@@ -70,7 +110,7 @@ export default function Settings({ settings, saveSettings, bundleStatus, onBack,
           <h2>Script Integration</h2>
           <p>Scripts are versioned, hashed and run against the simulated bridge.</p>
           <div className="script-row">
-            <div><b>autoplay-ratimoda.js</b><small>8 Ball Pool 56.34.0 · v2.0.0 · state machine</small></div>
+            <div><b>autoplay-ratimoda.js</b><small>8 Ball Pool {TARGET_BUILD} · v2.1.0 · state machine</small></div>
             <button className="btn primary" disabled={runningScript} onClick={onRunScript}>{runningScript ? 'Running…' : 'Run test'}</button>
           </div>
           <div className="script-row">
@@ -85,9 +125,9 @@ export default function Settings({ settings, saveSettings, bundleStatus, onBack,
 
         <section className="panel">
           <h2>Build Info</h2>
-          <div className="meta-line">D0J EnGine · v1.2.0 · private single-user build</div>
-          <div className="meta-line">Target reference: 8 Ball Pool 56.34.0</div>
-          <div className="meta-line">No seller · no key · no licence · no device binding</div>
+          <div className="meta-line">D0J EnGine · v2.0.0 · private single-user build</div>
+          <div className="meta-line">Target reference: 8 Ball Pool {TARGET_BUILD}</div>
+          <div className="meta-line">No seller · no licence · no device binding · local APK pass only</div>
           <div className="meta-line">State offsets/RVAs: <b>UNSET</b></div>
         </section>
       </div>

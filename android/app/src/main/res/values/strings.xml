@@ -4,4 +4,6 @@
     <string name="title_activity_main">D0J EnGine</string>
     <string name="package_name">com.d0j.engine</string>
     <string name="custom_url_scheme">com.d0j.engine</string>
+    <string name="d0j_purchase_guard_label">D0J Purchase Guard</string>
+    <string name="d0j_purchase_guard_description">Detects 8 Ball Pool coin or purchase screens and presses the system BACK button. It does not buy, pay, or modify the game.</string>
 </resources>

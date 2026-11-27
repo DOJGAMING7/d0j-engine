@@ -3,10 +3,10 @@
     {
       "id": "autoplay-ratimoda",
       "file": "scripts/autoplay-ratimoda.js",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "targetBuild": "8 Ball Pool 56.34.0",
       "enabled": true,
-      "hash": "8e6e0053206772cc6023fbc1dd02066b74381e3d0342ebf9749d359849c633d3"
+      "hash": "d29a5f851bf2142566577b84878e792c7698c04298c64bec36f5d993c4f34ef2"
     },
     {
       "id": "prediction-lines",
