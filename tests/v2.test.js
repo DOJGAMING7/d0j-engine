@@ -110,17 +110,33 @@ test('OTA gate cannot recurse into a cached UI iframe', () => {
   assert.ok(storage.includes("get('ui') === 'cache'"))
 })
 
-test('release version is bumped to 2.0.1', () => {
+test('D0JNative is registered before the Capacitor bridge is created', () => {
+  const main = read('android/app/src/main/java/com/d0j/engine/MainActivity.java')
+  const registerAt = main.indexOf('registerPlugin(D0JNativePlugin.class)')
+  const superAt = main.indexOf('super.onCreate(savedInstanceState)')
+  assert.ok(registerAt >= 0, 'registerPlugin call missing')
+  assert.ok(superAt >= 0, 'super.onCreate call missing')
+  assert.ok(registerAt < superAt, 'registerPlugin must run before super.onCreate')
+
+  const native = read('src/lib/native.js')
+  assert.ok(native.includes('handle.catch(() => noopHandle)'))
+  assert.ok(native.includes('return Promise.resolve(noopHandle)'))
+
+  const plugin = read('android/app/src/main/java/com/d0j/engine/D0JNativePlugin.java')
+  assert.ok(plugin.includes('if (options == null) options = call.getData();'))
+})
+
+test('release version is bumped to 2.0.2', () => {
   const pkg = JSON.parse(read('package.json'))
-  assert.equal(pkg.version, '2.0.1')
+  assert.equal(pkg.version, '2.0.2')
 
   const gradle = read('android/app/build.gradle')
-  assert.ok(gradle.includes('versionCode 4'))
-  assert.ok(gradle.includes('versionName "2.0.1"'))
+  assert.ok(gradle.includes('versionCode 5'))
+  assert.ok(gradle.includes('versionName "2.0.2"'))
 
   const settings = read('src/screens/Settings.jsx')
-  assert.ok(settings.includes('v2.0.1'))
+  assert.ok(settings.includes('v2.0.2'))
 
   const workflow = read('.github/workflows/build-apk.yml')
-  assert.ok(workflow.includes('tag_name: v2.0.1-${{ github.run_number }}'))
+  assert.ok(workflow.includes('tag_name: v2.0.2-${{ github.run_number }}'))
 })

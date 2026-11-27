@@ -1,14 +1,15 @@
 {
-  "version": "2.0.1",
+  "version": "2.0.2",
   "date": "2026-11-27",
   "bundle": "ui-bundle.zip",
-  "sha256": "92e7e080d8a691a66c03f70e629aae6584fb95ef32a8fce894565dead4c525ea",
+  "sha256": "ddef24f2ba232ba32090a281acfb043abf58ec39390b5f121a4aba6fb76870df",
   "notes": [
     "HOME MENU layout with supported games and 8BP redirect",
     "Bright green/black reference-matched mod menu",
     "Draggable floating D0J overlay and purchase guard",
     "APK PASS with salted hash",
     "Ratimoda v2.1 autoplay and local line prediction",
-    "Fixed boot loop: OTA auto-check off, cached iframe guard, one-time cache migration"
+    "Fixed boot loop: OTA auto-check off, cached iframe guard, one-time cache migration",
+    "Fixed D0JNative plugin registration and listener fallback"
   ]
 }

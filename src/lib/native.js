@@ -63,7 +63,14 @@ const native = {
   setUnlocked: value => call('setUnlocked', { value: value === true }),
   addListener: (eventName, listener) => {
     if (!Capacitor.isNativePlatform()) return Promise.resolve(noopHandle)
-    return plugin.addListener(eventName, listener)
+    try {
+      const handle = plugin.addListener(eventName, listener)
+      return handle && typeof handle.then === 'function'
+        ? handle.catch(() => noopHandle)
+        : Promise.resolve(handle || noopHandle)
+    } catch {
+      return Promise.resolve(noopHandle)
+    }
   }
 }
 

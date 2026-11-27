@@ -186,8 +186,9 @@ public class D0JNativePlugin extends Plugin {
 
     @PluginMethod
     public void syncConfig(PluginCall call) {
-        JSObject config = call.getObject("config");
-        JSObject options = config == null ? call.getObject("value") : config;
+        JSObject options = call.getObject("config");
+        if (options == null) options = call.getObject("value");
+        if (options == null) options = call.getData();
         if (options != null) {
             Iterator<String> keys = options.keys();
             while (keys.hasNext()) {

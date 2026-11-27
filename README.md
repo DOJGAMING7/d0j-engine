@@ -1,4 +1,4 @@
-# D0J EnGine v2.0.1
+# D0J EnGine v2.0.2
 
 Private, single-user Android client styled after the Snake Engine shell/layout language, rebuilt with a bright green and black theme. No seller panel, no licence server, no device binding, no premium gates, no orders and no payments.
 

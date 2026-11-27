@@ -9,8 +9,10 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+        // Capacitor builds the Bridge inside super.onCreate(). Plugins must be
+        // added to the Builder before that call or JS sees "not implemented".
         registerPlugin(D0JNativePlugin.class);
+        super.onCreate(savedInstanceState);
         try {
             WebView.setWebContentsDebuggingEnabled(false);
         } catch (Exception ignored) {}

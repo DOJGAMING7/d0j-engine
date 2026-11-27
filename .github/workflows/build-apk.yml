@@ -51,8 +51,8 @@ jobs:
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.0.1-${{ github.run_number }}
-          name: D0J EnGine v2.0.1-${{ github.run_number }}
+          tag_name: v2.0.2-${{ github.run_number }}
+          name: D0J EnGine v2.0.2-${{ github.run_number }}
           files: out/D0J-ENGINE-V1.apk
           generate_release_notes: true
           prerelease: true
