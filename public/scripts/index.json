@@ -3,10 +3,10 @@
     {
       "id": "autoplay-ratimoda",
       "file": "scripts/autoplay-ratimoda.js",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "targetBuild": "8 Ball Pool 56.34.0",
       "enabled": true,
-      "hash": ""
+      "hash": "8e6e0053206772cc6023fbc1dd02066b74381e3d0342ebf9749d359849c633d3"
     }
   ]
 }

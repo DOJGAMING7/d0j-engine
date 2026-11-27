@@ -1,10 +1,12 @@
 const DEFAULT_STATE = {
   ready: true,
+  phase: 'YOUR_TURN',
   turn: 'you',
   result: null,
   power: 74,
   spin: 0,
   aimError: 0,
+  manualInput: false,
   status: 'SIMULATED',
   queue: { mode: 'ONE', delay: 2, jitter: 0.4, retries: 2, limit: 3, queued: 0, matched: 0, completed: 0, failed: 0 }
 }
@@ -101,9 +103,11 @@ export function createBridge({ onLog = () => {} } = {}) {
     async tap(x, y, delay = 50) {
       if (stopped) throw new Error('stopped')
       await sleep(delay)
+      state.phase = 'OPPONENT_TURN'
       state.turn = 'opponent'
       state.result = `tap:${Math.round(x)},${Math.round(y)}`
-      state.aimError = Math.max(-2, Math.min(2, (state.aimError || 0) + 0.35))
+      state.manualInput = false
+      state.aimError = Math.max(-2, Math.min(2, Number(state.aimError || 0) + 0.35))
       emit()
       log(`tap ${Math.round(x)},${Math.round(y)} delay=${Math.round(delay)}ms`)
       return { x, y, delay }
@@ -127,11 +131,24 @@ export function createBridge({ onLog = () => {} } = {}) {
     if (simTimer) return
     simTimer = setInterval(() => {
       if (stopped) return
-      state.turn = state.turn === 'you' ? 'opponent' : 'you'
-      state.result = null
-      state.queue.queued += 1
+
+      if (state.phase === 'OPPONENT_TURN') {
+        state.phase = 'RESULT'
+        state.result = `sim:pot:${state.queue.completed + 1}`
+        state.queue.completed += 1
+        state.queue.matched += 1
+      } else if (state.phase === 'RESULT') {
+        state.phase = 'COOLDOWN'
+        state.result = null
+      } else if (state.phase === 'COOLDOWN' || state.phase === 'FIND_MATCH') {
+        state.phase = 'YOUR_TURN'
+        state.turn = 'you'
+        state.result = null
+        state.queue.queued += 1
+      }
+
       emit()
-    }, 2400)
+    }, 800)
   }
 
   function stopSimulation() {
@@ -144,5 +161,5 @@ export function createBridge({ onLog = () => {} } = {}) {
     emit()
   }
 
-  return { api, log, getState: api.getState, subscribe: api.subscribe, startSimulation, stopSimulation, reset, getConfig: api.getConfig, setConfig: api.setConfig }
+  return { api, log, getState: api.getState, setState: api.setState, subscribe: api.subscribe, startSimulation, stopSimulation, reset, getConfig: api.getConfig, setConfig: api.setConfig }
 }

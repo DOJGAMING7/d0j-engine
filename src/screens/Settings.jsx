@@ -70,7 +70,7 @@ export default function Settings({ settings, saveSettings, bundleStatus, onBack,
           <h2>Script Integration</h2>
           <p>Scripts are versioned, hashed and run against the simulated bridge.</p>
           <div className="script-row">
-            <div><b>autoplay-ratimoda.js</b><small>8 Ball Pool 56.34.0 · v1.0.0</small></div>
+            <div><b>autoplay-ratimoda.js</b><small>8 Ball Pool 56.34.0 · v2.0.0 · state machine</small></div>
             <button className="btn primary" disabled={runningScript} onClick={onRunScript}>{runningScript ? 'Running…' : 'Run test'}</button>
           </div>
           <div className="log-box">
@@ -81,7 +81,7 @@ export default function Settings({ settings, saveSettings, bundleStatus, onBack,
 
         <section className="panel">
           <h2>Build Info</h2>
-          <div className="meta-line">D0J EnGine · v1.0.0 · private single-user build</div>
+          <div className="meta-line">D0J EnGine · v1.1.0 · private single-user build</div>
           <div className="meta-line">Target reference: 8 Ball Pool 56.34.0</div>
           <div className="meta-line">No seller · no key · no licence · no device binding</div>
           <div className="meta-line">State offsets/RVAs: <b>UNSET</b></div>

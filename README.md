@@ -44,7 +44,7 @@ Scripts live in `public/scripts/` and are copied into the OTA bundle.
 
 Current script:
 
-- `autoplay-ratimoda.js` — 3-shot autoplay test using `waitFor`, `getState`, `tap`, `setConfig`, and `sleep`.
+- `autoplay-ratimoda.js` — v2 state-machine autoplay test: waits for `YOUR_TURN`, takes 3 correction-aimed shots, handles `OPPONENT_TURN`/`RESULT`, retries timeouts, re-queues, then stops cleanly.
 
 Runner API:
 
