@@ -1,0 +1,57 @@
+name: Build D0J EnGine APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Test scripts
+        run: npm test
+      - name: Build web UI
+        run: npm run build
+      - name: Verify web build
+        run: |
+          test -f dist/index.html
+          test -f dist/scripts/autoplay-ratimoda.js
+          node --check dist/assets/*.js
+      - name: Sync Capacitor
+        run: npx cap sync android
+      - name: Build APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/debug/app-debug.apk out/D0J-ENGINE-V1.apk
+          sha256sum out/D0J-ENGINE-V1.apk
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: D0J-ENGINE-V1
+          path: out/D0J-ENGINE-V1.apk
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0-${{ github.run_number }}
+          name: D0J EnGine v1.0.0-${{ github.run_number }}
+          files: out/D0J-ENGINE-V1.apk
+          generate_release_notes: true
+          prerelease: true

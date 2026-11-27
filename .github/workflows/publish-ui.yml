@@ -1,0 +1,45 @@
+name: Publish D0J UI Bundle
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'scripts/**'
+      - 'index.html'
+      - 'vite.config.js'
+      - 'package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build OTA bundle
+        run: npm run bundle
+      - name: Verify bundle
+        run: |
+          test -f updates/ui-bundle.zip
+          test -f updates/ui-manifest.json
+          unzip -t updates/ui-bundle.zip | tail -2
+      - name: Commit generated bundle
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add updates/ui-bundle.zip updates/ui-manifest.json
+          if git diff --cached --quiet; then echo "No OTA bundle changes"; else git commit -m "chore: publish OTA UI bundle [skip ci]"; git push; fi
+      - name: Upload OTA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: D0J-OTA-UI
+          path: updates/
