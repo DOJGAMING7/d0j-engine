@@ -1,8 +1,8 @@
 {
-  "version": "2.1.6",
+  "version": "2.1.7",
   "date": "2026-11-28",
   "bundle": "ui-bundle.zip",
-  "sha256": "5891ce20b2bb9741bd888da0c2a45319811ae9d171e22bfec4e24986f0716f61",
+  "sha256": "330ccb15d96d1175b7e08f461b5de611cc2013974f8e8997ee11a2bd35855a2c",
   "notes": [
     "HOME MENU layout with supported games and 8BP redirect",
     "Bright green/black reference-matched mod menu",
