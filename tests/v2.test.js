@@ -40,16 +40,16 @@ test('v2 config contains the reference feature names', () => {
 test('mod menu keeps core cheats and clean session labels', () => {
   const source = read('src/components/ModMenu.jsx') + read('src/lib/config.js') + read('src/screens/Home.jsx')
   const required = [
-    'D0J Mod Menu',
+    'Snake Engine Mod Menu',
     'Show lines', 'Keep lines after shot', 'Power lock',
     'Default power', 'Show pockets',
     'Enable auto play', 'Auto play mode',
     'Pro Fast', 'Pro Player', 'Fast Mode', 'Failed break',
     'Prioritize 9th ball', 'Paralysis opponent turn', 'Clean up shot',
     'Golden shot target',
-    'D0J Auto Queue', 'ONE', 'SESSION', 'INFINITE',
+    'Auto queue', 'ONE', 'SESSION', 'INFINITE',
     'Match limit', 'Delay', 'Jitter', 'Retries', 'Stop on manual input',
-    'Auto Queue With Coins / Table',
+    'Select table (tap to select)', 'Queue Table',
     'LAUNCH 8BP', 'RUN TEST', 'STOP'
   ]
   for (const label of required) {
@@ -60,7 +60,7 @@ test('mod menu keeps core cheats and clean session labels', () => {
 
 test('home screen has supported games and 8BP redirect target', () => {
   const source = read('src/screens/Home.jsx') + read('src/lib/config.js')
-  for (const label of ['SUPPORTED GAMES', '8 BALL POOL', 'CARROM POOL', 'SOCCER STARS']) {
+  for (const label of ['Supported Games', '8 BALL POOL', 'CARROM POOL', 'SOCCER STARS']) {
     assert.ok(source.includes(label), `missing home label: ${label}`)
   }
   const config = read('src/lib/config.js')

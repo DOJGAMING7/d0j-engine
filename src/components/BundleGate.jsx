@@ -53,11 +53,11 @@ export default function BundleGate({ children }) {
   }, [])
 
   if (!gate.ready) {
-    return <div className="boot"><div className="boot-card"><div className="boot-mark">D0J</div><div>Starting D0J EnGine…</div></div></div>
+    return <div className="boot"><div className="boot-card"><div className="boot-mark">S</div><div>Starting SNAKE ENGINE…</div></div></div>
   }
   if (gate.cachedUrl) {
     const separator = gate.cachedUrl.includes('?') ? '&' : '?'
-    return <iframe title="D0J EnGine UI" src={`${gate.cachedUrl}${separator}ui=cache`} className="bundle-frame" />
+    return <iframe title="SNAKE ENGINE UI" src={`${gate.cachedUrl}${separator}ui=cache`} className="bundle-frame" />
   }
   return children
 }

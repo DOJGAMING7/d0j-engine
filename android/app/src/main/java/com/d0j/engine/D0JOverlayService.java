@@ -25,6 +25,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -51,6 +52,14 @@ public class D0JOverlayService extends Service {
     private static final String CHANNEL_ID = "d0j_session";
     private static final int NOTIFICATION_ID = 7701;
     private static volatile boolean active = false;
+    private static java.lang.ref.WeakReference<D0JOverlayService> instanceRef =
+            new java.lang.ref.WeakReference<>(null);
+
+    static void onConfigChanged(JSObject patch) {
+        D0JOverlayService service = instanceRef.get();
+        if (service == null) return;
+        service.main.post(service::refreshQuickControls);
+    }
 
     public static boolean canOverlay(Context context) {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context);
@@ -66,7 +75,23 @@ public class D0JOverlayService extends Service {
     private WindowManager.LayoutParams menuParams;
     private LinearLayout menuContent;
     private String menuTab = "status";
+    private TextView menuTimer;
+    private long sessionStartedAt;
+    private Button floatAutoBtn;
+    private Button floatQueueBtn;
     private final java.util.HashMap<String, Button> menuTabButtons = new java.util.HashMap<>();
+    private final Runnable menuTimerTick = new Runnable() {
+        @Override public void run() {
+            if (menuTimer == null) return;
+            long elapsed = Math.max(0, System.currentTimeMillis() - sessionStartedAt);
+            long h = elapsed / 3600000L;
+            long m = (elapsed / 60000L) % 60L;
+            long s = (elapsed / 1000L) % 60L;
+            long cs = (elapsed / 10L) % 100L;
+            menuTimer.setText(String.format(java.util.Locale.US, "%02d : %02d : %02d : %02d", h, m, s, cs));
+            main.postDelayed(this, 100);
+        }
+    };
     private WindowManager.LayoutParams toastParams;
     private View lineView;
     private WindowManager.LayoutParams lineParams;
@@ -109,6 +134,7 @@ public class D0JOverlayService extends Service {
 
     @Override public void onCreate() {
         super.onCreate();
+        instanceRef = new java.lang.ref.WeakReference<>(this);
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         createChannel();
     }
@@ -159,6 +185,7 @@ public class D0JOverlayService extends Service {
             String state = intent.getStringExtra("status");
             if (state != null && !state.trim().isEmpty()) statusState = state.trim();
         }
+        if (!active) sessionStartedAt = System.currentTimeMillis();
         D0JPrefs.setBoolean(this, D0JPrefs.SESSION_ACTIVE, true);
         D0JPrefs.setString(this, D0JPrefs.SESSION_PACKAGE, sessionPackage);
         startForegroundCompat();
@@ -216,8 +243,8 @@ public class D0JOverlayService extends Service {
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return;
-        NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "D0J Session", NotificationManager.IMPORTANCE_LOW);
-        channel.setDescription("D0J EnGine session status and actions");
+        NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "SNAKE ENGINE Session", NotificationManager.IMPORTANCE_LOW);
+        channel.setDescription("SNAKE ENGINE session status and actions");
         channel.setLightColor(Color.WHITE);
         manager.createNotificationChannel(channel);
     }
@@ -238,7 +265,7 @@ public class D0JOverlayService extends Service {
         Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(this, CHANNEL_ID)
                 : new Notification.Builder(this);
-        b.setContentTitle("D0J EnGine active")
+        b.setContentTitle("SNAKE ENGINE active")
                 .setContentText(statusText)
                 .setSmallIcon(android.R.drawable.ic_menu_compass)
                 .setOngoing(true)
@@ -256,59 +283,121 @@ public class D0JOverlayService extends Service {
 
     private void createFloatButton() {
         DisplayMetrics dm = getResources().getDisplayMetrics();
-        int size = dp(58);
-        LinearLayout wrap = new LinearLayout(this);
-        wrap.setGravity(Gravity.CENTER);
+        int width = dp(66);
+
+        LinearLayout rail = new LinearLayout(this);
+        rail.setOrientation(LinearLayout.VERTICAL);
+        rail.setGravity(Gravity.CENTER_HORIZONTAL);
+        rail.setPadding(dp(4), dp(4), dp(4), dp(4));
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(Color.parseColor("#121212"));
         bg.setCornerRadius(dp(18));
-        bg.setStroke(dp(1), Color.parseColor("#E0E0E0"));
-        wrap.setBackground(bg);
-        wrap.setPadding(dp(6), dp(6), dp(6), dp(6));
+        bg.setStroke(dp(1), Color.parseColor("#333333"));
+        rail.setBackground(bg);
 
-        TextView tv = new TextView(this);
-        tv.setText("D0J");
-        tv.setTextColor(Color.WHITE);
-        tv.setTypeface(Typeface.DEFAULT_BOLD);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        wrap.addView(tv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        TextView handle = new TextView(this);
+        handle.setText("SNAKE");
+        handle.setGravity(Gravity.CENTER);
+        handle.setTextColor(Color.parseColor("#3BD62B"));
+        handle.setTypeface(Typeface.DEFAULT_BOLD);
+        handle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 8);
+        handle.setLetterSpacing(0.08f);
+        handle.setBackgroundColor(Color.TRANSPARENT);
+        rail.addView(handle, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(20)));
+
+        floatAutoBtn = quickButton("PLAY", "autoPlay");
+        floatQueueBtn = quickButton("QUEUE", "autoQueue");
+        Button menuBtn = quickButton("MENU", null);
+        menuBtn.setOnClickListener(v -> togglePanel());
+
+        LinearLayout.LayoutParams quickLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46));
+        quickLp.topMargin = dp(3);
+        rail.addView(floatAutoBtn, quickLp);
+        rail.addView(floatQueueBtn, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
+        rail.addView(menuBtn, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
 
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE;
         int flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
-        buttonParams = new WindowManager.LayoutParams(size, size, type, flags, PixelFormat.TRANSLUCENT);
+        buttonParams = new WindowManager.LayoutParams(width, WindowManager.LayoutParams.WRAP_CONTENT, type, flags, PixelFormat.TRANSLUCENT);
         buttonParams.gravity = Gravity.TOP | Gravity.START;
-        buttonParams.x = D0JPrefs.getInt(this, D0JPrefs.FLOAT_X, Math.max(0, dm.widthPixels - size - dp(12)));
-        buttonParams.y = D0JPrefs.getInt(this, D0JPrefs.FLOAT_Y, dp(120));
+        buttonParams.x = Math.max(0, Math.min(dm.widthPixels - width,
+                D0JPrefs.getInt(this, D0JPrefs.FLOAT_X, Math.max(0, dm.widthPixels - width - dp(12)))));
+        buttonParams.y = Math.max(0, Math.min(dm.heightPixels - dp(190),
+                D0JPrefs.getInt(this, D0JPrefs.FLOAT_Y, dp(120))));
 
-        wrap.setOnTouchListener(new View.OnTouchListener() {
-            float downX, downY; int startX, startY; long downTime; boolean moved;
+        handle.setOnTouchListener(new View.OnTouchListener() {
+            float downX, downY; int startX, startY; boolean moved;
             @Override public boolean onTouch(View v, MotionEvent e) {
                 switch (e.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
                         downX = e.getRawX(); downY = e.getRawY();
                         startX = buttonParams.x; startY = buttonParams.y;
-                        downTime = System.currentTimeMillis(); moved = false; return true;
+                        moved = false; return true;
                     case MotionEvent.ACTION_MOVE:
                         int dx = (int) (e.getRawX() - downX); int dy = (int) (e.getRawY() - downY);
                         if (Math.abs(dx) > dp(4) || Math.abs(dy) > dp(4)) moved = true;
-                        buttonParams.x = Math.max(0, startX + dx);
-                        buttonParams.y = Math.max(0, startY + dy);
+                        DisplayMetrics metrics = getResources().getDisplayMetrics();
+                        buttonParams.x = Math.max(0, Math.min(metrics.widthPixels - dp(66), startX + dx));
+                        buttonParams.y = Math.max(0, Math.min(metrics.heightPixels - dp(190), startY + dy));
                         try { windowManager.updateViewLayout(floatButton, buttonParams); } catch (Exception ignored) {}
                         return true;
                     case MotionEvent.ACTION_UP:
-                        D0JPrefs.setInt(D0JOverlayService.this, D0JPrefs.FLOAT_X, buttonParams.x);
-                        D0JPrefs.setInt(D0JOverlayService.this, D0JPrefs.FLOAT_Y, buttonParams.y);
-                        if (!moved && System.currentTimeMillis() - downTime < 350) togglePanel();
+                        if (moved) {
+                            D0JPrefs.setInt(D0JOverlayService.this, D0JPrefs.FLOAT_X, buttonParams.x);
+                            D0JPrefs.setInt(D0JOverlayService.this, D0JPrefs.FLOAT_Y, buttonParams.y);
+                        }
                         return true;
                 }
                 return false;
             }
         });
 
-        floatButton = wrap;
+        floatButton = rail;
+        refreshQuickControls();
         try { windowManager.addView(floatButton, buttonParams); } catch (Exception ignored) { floatButton = null; }
+    }
+
+    private Button quickButton(String label, String key) {
+        Button b = new Button(this);
+        b.setAllCaps(false);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
+        b.setTypeface(Typeface.DEFAULT_BOLD);
+        b.setPadding(0, 0, 0, 0);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setTag(label);
+        if (key != null) b.setOnClickListener(v -> toggleQuick(key));
+        styleQuickButton(b, label, key);
+        return b;
+    }
+
+    private void styleQuickButton(Button button, String label, String key) {
+        boolean on = key != null && D0JPrefs.getConfigBoolean(this, key, false);
+        button.setText(label + "\n" + (key == null ? "OPEN" : (on ? "ON" : "OFF")));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor(key != null && on ? "#173A12" : "#1A1A1A"));
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), Color.parseColor(key != null && on ? "#3BD62B" : "#333333"));
+        button.setBackground(bg);
+        button.setTextColor(Color.parseColor(key != null && on ? "#7CFC3A" : "#A0A0A0"));
+    }
+
+    private void refreshQuickControls() {
+        if (floatAutoBtn != null) styleQuickButton(floatAutoBtn, "PLAY", "autoPlay");
+        if (floatQueueBtn != null) styleQuickButton(floatQueueBtn, "QUEUE", "autoQueue");
+    }
+
+    private void toggleQuick(String key) {
+        boolean next = !D0JPrefs.getConfigBoolean(this, key, false);
+        D0JPrefs.setString(this, D0JPrefs.CONFIG_PREFIX + key, String.valueOf(next));
+        refreshQuickControls();
+        JSObject patch = new JSObject();
+        patch.put(key, next);
+        D0JNativePlugin.notifyConfigChanged(patch);
+        boolean auto = "autoPlay".equals(key);
+        showToast((auto ? "AUTO PLAY " : "AUTO QUEUE ") + (next ? "ON" : "OFF"), next ? "pass" : "info");
     }
 
     private void togglePanel() {
@@ -323,9 +412,9 @@ public class D0JOverlayService extends Service {
         int height = Math.min(dm.heightPixels - dp(96), dp(640));
 
         GradientDrawable shellBg = new GradientDrawable();
-        shellBg.setColor(Color.parseColor("#111111"));
+        shellBg.setColor(Color.parseColor("#1A1A1A"));
         shellBg.setCornerRadius(dp(24));
-        shellBg.setStroke(dp(1), Color.parseColor("#303030"));
+        shellBg.setStroke(dp(1), Color.parseColor("#333333"));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.HORIZONTAL);
@@ -342,24 +431,23 @@ public class D0JOverlayService extends Service {
         side.setPadding(dp(6), dp(8), dp(6), dp(8));
         side.setLayoutParams(new LinearLayout.LayoutParams(dp(72), LinearLayout.LayoutParams.MATCH_PARENT));
         GradientDrawable sideBg = new GradientDrawable();
-        sideBg.setColor(Color.parseColor("#151515"));
-        sideBg.setCornerRadius(dp(20));
-        sideBg.setStroke(dp(1), Color.parseColor("#303030"));
+        sideBg.setColor(Color.parseColor("#161616"));
+        sideBg.setCornerRadius(dp(18));
+        sideBg.setStroke(dp(1), Color.parseColor("#333333"));
         side.setBackground(sideBg);
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(dp(6), dp(4), dp(6), dp(8));
-        TextView logo = new TextView(this);
-        logo.setText("D0J");
-        logo.setGravity(Gravity.CENTER);
-        logo.setTextColor(Color.BLACK);
-        logo.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        logo.setTypeface(Typeface.DEFAULT_BOLD);
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.ic_snake_mark);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        logo.setPadding(dp(3), dp(3), dp(3), dp(3));
         GradientDrawable logoBg = new GradientDrawable();
-        logoBg.setColor(Color.WHITE);
+        logoBg.setColor(Color.parseColor("#0B0B0D"));
         logoBg.setCornerRadius(dp(14));
+        logoBg.setStroke(dp(1), Color.parseColor("#333333"));
         logo.setBackground(logoBg);
         header.addView(logo, new LinearLayout.LayoutParams(dp(44), dp(44)));
 
@@ -367,29 +455,31 @@ public class D0JOverlayService extends Service {
         copy.setOrientation(LinearLayout.VERTICAL);
         copy.setPadding(dp(10), 0, 0, 0);
         TextView title = new TextView(this);
-        title.setText("D0J ENGINE");
-        title.setTextColor(Color.WHITE);
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        title.setText("SNAKE ENGINE");
+        title.setTextColor(Color.parseColor("#3BD62B"));
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         copy.addView(title);
         TextView sub = new TextView(this);
-        sub.setText("8 Ball Pool · v56.34.0 · session");
-        sub.setTextColor(Color.parseColor("#A8A8A8"));
-        sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        sub.setText("8 Ball Pool · v56.34.0");
+        sub.setTextColor(Color.parseColor("#9A9AA0"));
+        sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9);
         copy.addView(sub);
         header.addView(copy, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
-        TextView pill = new TextView(this);
-        pill.setText(findingShot() ? "Finding shot..." : statusText);
-        pill.setTextColor(Color.WHITE);
-        pill.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        pill.setPadding(dp(10), dp(6), dp(10), dp(6));
-        GradientDrawable pillBg = new GradientDrawable();
-        pillBg.setColor(Color.parseColor("#1B1B1B"));
-        pillBg.setCornerRadius(dp(14));
-        pillBg.setStroke(dp(1), Color.parseColor("#303030"));
-        pill.setBackground(pillBg);
-        header.addView(pill, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        menuTimer = new TextView(this);
+        menuTimer.setTextColor(Color.parseColor("#F2F2F2"));
+        menuTimer.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        menuTimer.setTypeface(Typeface.DEFAULT_BOLD);
+        menuTimer.setGravity(Gravity.CENTER);
+        menuTimer.setPadding(dp(8), dp(6), dp(8), dp(6));
+        GradientDrawable timerBg = new GradientDrawable();
+        timerBg.setColor(Color.parseColor("#262626"));
+        timerBg.setCornerRadius(dp(10));
+        menuTimer.setBackground(timerBg);
+        header.addView(menuTimer, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        main.removeCallbacks(menuTimerTick);
+        main.post(menuTimerTick);
         main.addView(header);
 
         ScrollView scroll = new ScrollView(this);
@@ -406,24 +496,25 @@ public class D0JOverlayService extends Service {
         TextView app = new TextView(this);
         app.setText("8BP");
         app.setGravity(Gravity.CENTER);
-        app.setTextColor(Color.BLACK);
+        app.setTextColor(Color.parseColor("#7CFC3A"));
         app.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         app.setTypeface(Typeface.DEFAULT_BOLD);
         GradientDrawable appBg = new GradientDrawable();
-        appBg.setColor(Color.WHITE);
+        appBg.setColor(Color.parseColor("#242424"));
         appBg.setCornerRadius(dp(16));
+        appBg.setStroke(dp(1), Color.parseColor("#3A3A3A"));
         app.setBackground(appBg);
         side.addView(app, new LinearLayout.LayoutParams(dp(52), dp(52)));
         side.addView(divider());
 
         menuTabButtons.clear();
         String[][] tabs = {
-                { "status", "O", "Status" },
-                { "lines", "/", "Lines" },
-                { "autoplay", ">", "Auto" },
-                { "queue", "=", "Queue" },
+                { "status", "◎", "Status" },
+                { "lines", "╱", "Lines" },
+                { "autoplay", "▶", "Auto" },
+                { "queue", "☰", "Queue" },
                 { "eightball", "8", "8 Ball" },
-                { "settings", "#", "Settings" }
+                { "settings", "⚙", "Settings" }
         };
         for (String[] item : tabs) {
             Button tab = smallBtn(item[1]);
@@ -506,11 +597,11 @@ public class D0JOverlayService extends Service {
         for (java.util.Map.Entry<String, Button> entry : menuTabButtons.entrySet()) {
             boolean on = entry.getKey().equals(active);
             GradientDrawable bg = new GradientDrawable();
-            bg.setColor(Color.parseColor(on ? "#FFFFFF" : "#1B1B1B"));
+            bg.setColor(Color.parseColor(on ? "#232323" : "#1B1B1B"));
             bg.setCornerRadius(dp(16));
-            bg.setStroke(dp(1), Color.parseColor(on ? "#FFFFFF" : "#303030"));
+            bg.setStroke(dp(1), Color.parseColor(on ? "#7CFC3A" : "#303030"));
             entry.getValue().setBackground(bg);
-            entry.getValue().setTextColor(on ? Color.BLACK : Color.WHITE);
+            entry.getValue().setTextColor(Color.parseColor(on ? "#7CFC3A" : "#F2F2F2"));
         }
     }
 
@@ -619,11 +710,21 @@ public class D0JOverlayService extends Service {
 
     private TextView section(String text) {
         TextView tv = new TextView(this);
-        tv.setText(text.toUpperCase());
-        tv.setTextColor(Color.parseColor("#FFFFFF"));
+        tv.setText("▍ " + text.toUpperCase());
+        tv.setTextColor(Color.parseColor("#F2F2F2"));
         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         tv.setTypeface(Typeface.DEFAULT_BOLD);
-        tv.setPadding(0, dp(12), 0, dp(6));
+        tv.setPadding(dp(10), dp(10), dp(10), dp(10));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#232323"));
+        bg.setCornerRadius(dp(10));
+        bg.setStroke(dp(1), Color.parseColor("#333333"));
+        tv.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(10);
+        lp.bottomMargin = dp(4);
+        tv.setLayoutParams(lp);
         return tv;
     }
 
@@ -674,35 +775,54 @@ public class D0JOverlayService extends Service {
 
     private void addToggle(LinearLayout content, String label, String key, boolean def) {
         boolean checked = D0JPrefs.getConfigBoolean(this, key, def);
-        Button row = new Button(this);
-        row.setAllCaps(false);
-        row.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-        row.setText(label + "   [" + (checked ? "ON" : "OFF") + "]");
-        row.setTextColor(Color.WHITE);
-        row.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(checked ? Color.parseColor("#2A2A2A") : Color.parseColor("#191919"));
-        bg.setCornerRadius(dp(12));
-        bg.setStroke(dp(1), Color.parseColor(checked ? "#FFFFFF" : "#333333"));
-        row.setBackground(bg);
-        row.setPadding(dp(14), dp(10), dp(14), dp(10));
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(14), dp(9), dp(14), dp(9));
+        styleToggleRow(row, checked);
+
+        TextView text = new TextView(this);
+        text.setText(label);
+        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        text.setTextColor(Color.parseColor(checked ? "#FFD400" : "#F2F2F2"));
+        row.addView(text, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        Switch toggle = new Switch(this);
+        toggle.setChecked(checked);
+        toggle.setShowText(false);
+        styleToggleSwitch(toggle, checked);
+        toggle.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            D0JPrefs.setString(D0JOverlayService.this, D0JPrefs.CONFIG_PREFIX + key, String.valueOf(isChecked));
+            styleToggleRow(row, isChecked);
+            text.setTextColor(Color.parseColor(isChecked ? "#FFD400" : "#F2F2F2"));
+            styleToggleSwitch(toggle, isChecked);
+            JSObject patch = new JSObject();
+            patch.put(key, isChecked);
+            D0JNativePlugin.notifyConfigChanged(patch);
+        });
+        row.addView(toggle, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.bottomMargin = dp(8);
         row.setLayoutParams(lp);
-        row.setOnClickListener(v -> {
-            boolean next = !D0JPrefs.getConfigBoolean(this, key, def);
-            D0JPrefs.setString(this, D0JPrefs.CONFIG_PREFIX + key, String.valueOf(next));
-            row.setText(label + "   [" + (next ? "ON" : "OFF") + "]");
-            GradientDrawable nbg = new GradientDrawable();
-            nbg.setColor(next ? Color.parseColor("#2A2A2A") : Color.parseColor("#191919"));
-            nbg.setCornerRadius(dp(12));
-            nbg.setStroke(dp(1), Color.parseColor(next ? "#FFFFFF" : "#333333"));
-            row.setBackground(nbg);
-            JSObject patch = new JSObject();
-            patch.put(key, next);
-            D0JNativePlugin.notifyConfigChanged(patch);
-        });
         content.addView(row);
+    }
+
+    private void styleToggleRow(LinearLayout row, boolean checked) {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(checked ? Color.parseColor("#332E10") : Color.parseColor("#191919"));
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), Color.parseColor(checked ? "#FFD400" : "#333333"));
+        row.setBackground(bg);
+    }
+
+    private void styleToggleSwitch(Switch toggle, boolean checked) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            toggle.setThumbTintList(android.content.res.ColorStateList.valueOf(
+                    Color.parseColor(checked ? "#FFF8D6" : "#C9C9C9")));
+            toggle.setTrackTintList(android.content.res.ColorStateList.valueOf(
+                    Color.parseColor(checked ? "#FFD400" : "#3A3A3A")));
+        }
     }
 
     private void addSeek(LinearLayout content, String label, String key, int min, int max, int def, String suffix) {
@@ -721,12 +841,18 @@ public class D0JOverlayService extends Service {
 
         TextView head = new TextView(this);
         head.setText(label + ": " + val + suffix);
-        head.setTextColor(Color.WHITE);
+        head.setTextColor(Color.parseColor("#F2F2F2"));
         head.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
         wrap.addView(head);
         SeekBar sb = new SeekBar(this);
         sb.setMax(max - min);
         sb.setProgress(val - min);
+        try {
+            android.content.res.ColorStateList yellow =
+                    android.content.res.ColorStateList.valueOf(Color.parseColor("#FFD400"));
+            sb.setProgressTintList(yellow);
+            sb.setThumbTintList(yellow);
+        } catch (Exception ignored) { }
         sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 int v = min + progress;
@@ -775,11 +901,11 @@ public class D0JOverlayService extends Service {
                     Button b = smallBtn(opt);
                     boolean active = opt.equals(cur);
                     GradientDrawable bbg = new GradientDrawable();
-                    bbg.setColor(active ? Color.parseColor("#FFFFFF") : Color.parseColor("#222222"));
+                    bbg.setColor(active ? Color.parseColor("#2E2E2E") : Color.parseColor("#222222"));
                     bbg.setCornerRadius(dp(10));
-                    bbg.setStroke(dp(1), Color.parseColor(active ? "#FFFFFF" : "#444444"));
+                    bbg.setStroke(dp(1), Color.parseColor(active ? "#7CFC3A" : "#444444"));
                     b.setBackground(bbg);
-                    b.setTextColor(active ? Color.BLACK : Color.WHITE);
+                    b.setTextColor(Color.parseColor(active ? "#7CFC3A" : "#F2F2F2"));
                     LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
                     blp.rightMargin = dp(6);
                     b.setLayoutParams(blp);
@@ -812,7 +938,7 @@ public class D0JOverlayService extends Service {
         root.setPadding(dp(14), dp(10), dp(14), dp(10));
 
         TextView t = new TextView(this);
-        t.setText("D0J ENGINE");
+        t.setText("SNAKE ENGINE");
         t.setTextColor(Color.WHITE);
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         t.setTypeface(Typeface.DEFAULT_BOLD);
@@ -963,12 +1089,14 @@ public class D0JOverlayService extends Service {
     }
 
     private void removeMenu() {
+        main.removeCallbacks(menuTimerTick);
         if (menuView != null) {
             try { windowManager.removeView(menuView); } catch (Exception ignored) {}
             menuView = null;
             menuWebView = null;
         }
         menuContent = null;
+        menuTimer = null;
         menuTabButtons.clear();
     }
 
@@ -977,6 +1105,8 @@ public class D0JOverlayService extends Service {
             try { windowManager.removeView(floatButton); } catch (Exception ignored) {}
             floatButton = null;
         }
+        floatAutoBtn = null;
+        floatQueueBtn = null;
     }
 
     private int dp(int v) {
@@ -984,6 +1114,8 @@ public class D0JOverlayService extends Service {
     }
 
     @Override public void onDestroy() {
+        instanceRef = new java.lang.ref.WeakReference<>(null);
+        main.removeCallbacks(menuTimerTick);
         main.removeCallbacks(sessionWatchdog);
         main.removeCallbacks(hideToastRunnable);
         removeMenu();

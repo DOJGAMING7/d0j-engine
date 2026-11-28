@@ -300,7 +300,7 @@ public class D0JNativePlugin extends Plugin {
 
     @PluginMethod
     public void showNotification(PluginCall call) {
-        String title = call.getString("title", "D0J EnGine");
+        String title = call.getString("title", "SNAKE ENGINE");
         String text = call.getString("text", "Session active");
         String status = call.getString("status", "running");
         D0JPrefs.setString(getContext(), D0JPrefs.SESSION_STATUS, status);
@@ -590,6 +590,7 @@ public class D0JNativePlugin extends Plugin {
 
     static void notifyConfigChanged(JSObject patch) {
         notify("configChanged", patch == null ? new JSObject() : patch);
+        D0JOverlayService.onConfigChanged(patch);
     }
 
     static void notifySessionEnded(String reason) {

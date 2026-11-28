@@ -379,7 +379,7 @@ export default function Settings({
 
         <section className="panel">
           <h2>Build Info / Limits</h2>
-          <div className="meta-line">D0J EnGine · private single-user build</div>
+          <div className="meta-line">SNAKE ENGINE · private single-user build</div>
           <div className="meta-line">A1: No Accessibility, no purchase guard, no auto-back.</div>
           <div className="meta-line">2B fallback: session-scoped overlay permission only when game session starts.</div>
           <div className="meta-line">Prediction: demo table local/simulated. Real 8BP live lines need in-game bridge/patch.</div>

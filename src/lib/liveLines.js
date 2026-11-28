@@ -12,6 +12,31 @@ const number = value => {
 
 export const DEFAULT_CALIBRATION = { x: 0, y: 0, width: 600, height: 900 }
 
+// Stable per-ball colours so a ball keeps the same line colour between shots.
+// Cue stays white; the 8 ball uses a high-contrast silver so it reads on blue.
+export const BALL_COLORS = {
+  CUE: '#FFFFFF',
+  '1': '#FFD400',
+  '2': '#1E88E5',
+  '3': '#E53935',
+  '4': '#8E24AA',
+  '5': '#FB8C00',
+  '6': '#43A047',
+  '7': '#8D6E63',
+  '8': '#ECEFF1',
+  '9': '#FFF176',
+  '10': '#64B5F6',
+  '11': '#EF5350',
+  '12': '#AB47BC',
+  '13': '#FFA726',
+  '14': '#66BB6A',
+  '15': '#A1887F'
+}
+
+export function colorForBall(ballId) {
+  return BALL_COLORS[String(ballId || '').toUpperCase()] || '#39FF14'
+}
+
 export function normalizeCalibration(input) {
   const values = {}
   for (const key of Object.keys(DEFAULT_CALIBRATION)) {
@@ -44,41 +69,44 @@ export function buildLiveOverlay(snapshot, options = {}) {
   const lines = []
   for (const shot of plan.plans) {
     const id = String(shot.ballId || '')
+    const ballColor = options.targetColor || colorForBall(id)
+    const cueColor = options.cueColor || '#FFFFFF'
     lines.push({
       id: `cue-${id}`,
       type: 'path',
       points: [map(shot.cue), map(shot.ghost)],
-      color: options.cueColor || '#39FF14',
-      width: 2.4,
+      color: cueColor,
+      width: 2.2,
+      alpha: 0.9,
       glow: true
     })
     lines.push({
       id: `target-${id}`,
       type: 'path',
       points: [map(shot.ghost), map(shot.pocket)],
-      color: options.targetColor || '#B6FF9E',
-      width: 1.6,
-      alpha: 0.75,
-      dash: [7, 6]
+      color: ballColor,
+      width: 1.9,
+      alpha: 0.82
     })
     lines.push({
       id: `ghost-${id}`,
       type: 'circle',
       ...map(shot.ghost),
-      radius: 8,
-      color: '#00E676',
+      radius: 7,
+      color: ballColor,
       width: 2,
-      dash: [4, 4]
+      alpha: 0.95
     })
     lines.push({
       id: `pocket-${id}`,
       type: 'circle',
       ...map(shot.pocket),
-      radius: Math.max(12, Math.round(18 * ((scaleX + scaleY) / 2))),
-      color: options.pocketColor || '#39FF14',
-      width: 2
+      radius: Math.max(11, Math.round(16 * ((scaleX + scaleY) / 2))),
+      color: ballColor,
+      width: 2,
+      alpha: 0.85
     })
-    if (id) {
+    if (options.labels === true && id) {
       const label = map(shot.ball)
       lines.push({
         id: `label-${id}`,

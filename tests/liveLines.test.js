@@ -31,11 +31,19 @@ test('live overlay maps measured state into screen-space line specs', () => {
   assert.deepEqual(normalizeCalibration(built.calibration), { x: 100, y: 50, width: 1200, height: 1800 })
 
   const types = new Set(built.lines.map(line => line.type))
-  for (const type of ['path', 'circle', 'text']) assert.ok(types.has(type))
+  for (const type of ['path', 'circle']) assert.ok(types.has(type))
+  assert.equal(types.has('text'), false, 'labels are opt-in so the overlay stays clean')
+  const labelled = buildLiveOverlay(snapshot(), { labels: true, calibration: { x: 100, y: 50, width: 1200, height: 1800 } })
+  assert.ok(labelled.lines.some(line => line.type === 'text'))
+
   const cueLine = built.lines.find(line => line.id === 'cue-1')
   assert.deepEqual(cueLine.points[0], { x: 700, y: 1370 })
+  assert.equal(cueLine.color, '#FFFFFF')
+  const targetLine = built.lines.find(line => line.id === 'target-1')
+  assert.equal(targetLine.color, '#FFD400')
   const ghostLine = built.lines.find(line => line.id === 'ghost-1')
   assert.ok(ghostLine && Number.isFinite(ghostLine.x) && Number.isFinite(ghostLine.y))
+  assert.equal(ghostLine.color, '#FFD400')
   for (const line of built.lines) {
     if (line.type === 'path') assert.equal(line.points.length, 2)
   }

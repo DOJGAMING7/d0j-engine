@@ -1,10 +1,10 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">D0J EnGine</string>
-    <string name="title_activity_main">D0J EnGine</string>
+    <string name="app_name">SNAKE ENGINE</string>
+    <string name="title_activity_main">SNAKE ENGINE</string>
     <string name="package_name">com.d0j.engine</string>
     <string name="custom_url_scheme">com.d0j.engine</string>
-    <string name="d0j_session_notification_channel">D0J Session</string>
-    <string name="d0j_session_notification_title">D0J EnGine active</string>
+    <string name="d0j_session_notification_channel">SNAKE ENGINE Session</string>
+    <string name="d0j_session_notification_title">SNAKE ENGINE active</string>
     <string name="d0j_session_notification_text">Game session overlay is ready.</string>
 </resources>

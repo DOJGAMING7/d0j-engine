@@ -34,7 +34,7 @@ export default function PassGate({ onUnlock }) {
       <form className="pass-card" onSubmit={submit}>
         <small className="card-label">PRIVATE CLIENT</small>
         <h1>APK PASS</h1>
-        <p>Enter your local access key to open D0J EnGine.</p>
+        <p>Enter your local access key to open SNAKE ENGINE.</p>
         <input
           className="pass-input"
           type="password"

@@ -87,7 +87,7 @@ function Main() {
   const pushStatus = async (state, text, notify = true) => {
     setSessionStatus({ state, text })
     if (notify && config.notificationsEnabled) {
-      native.showNotification({ title: 'D0J EnGine', text, status: state }).catch(() => {})
+      native.showNotification({ title: 'SNAKE ENGINE', text, status: state }).catch(() => {})
     }
   }
 
@@ -109,48 +109,59 @@ function Main() {
     const add = (name, ok, detail, group = 'core') =>
       items.push({ name, ok: !!ok, detail: String(detail || ''), group })
     pushStatus('testing', 'Running quick test...')
+    let step = 'Quick test'
     try {
+      step = 'Native bridge'
       const ping = await native.ping()
       add('Native bridge', ping?.ok !== false || !native.isNative(), native.isNative() ? (ping?.ok ? 'pong' : 'unavailable') : 'web mode')
+      step = 'Overlay permission'
       const overlay = await native.hasOverlayPermission()
       add('Overlay permission', overlay?.granted === true || !native.isNative(), overlay?.granted ? 'granted' : 'pending until granted', 'device')
+      step = 'Notification permission'
       const notif = await native.hasNotificationPermission()
       add('Notification permission', notif?.granted === true || !native.isNative(), notif?.granted ? 'granted' : 'pending until granted', 'device')
+      step = 'Session service'
       const session = await native.getSessionStatus()
       add('Session service', true, session?.active ? 'active' : 'ready')
-      const table = bridge.getTable ? bridge.getTable() : (liveState.table || createDefaultTable())
+      step = 'Prediction engine'
+      const table = bridge.getTable ? await bridge.getTable() : (liveState.table || createDefaultTable())
       const prediction = computePrediction({ table, aim: { x: table.cue.x, y: Math.max(80, table.cue.y - 220) }, power: 74, spin: 0 })
       add('Prediction engine', !!prediction?.ok && Array.isArray(prediction?.path) && prediction.path.length > 1, prediction?.ok ? `path ${prediction.path.length}` : (prediction?.reason || 'no path'))
+      step = 'Ratimoda script'
       try {
         const src = await loadScriptSource('autoplay-ratimoda.js')
         add('Ratimoda script', typeof src === 'string' && src.includes('Ratimoda'), `len ${src?.length || 0}`)
       } catch (e) { add('Ratimoda script', false, e?.message || e) }
+      step = 'Prediction script'
       try {
         const src2 = await loadScriptSource('prediction-lines.js')
         add('Prediction script', typeof src2 === 'string' && src2.includes('predict'), `len ${src2?.length || 0}`)
       } catch (e) { add('Prediction script', false, e?.message || e) }
+      step = 'Config'
       add('Config', !!config && typeof config.power === 'number', `power ${config?.power}`)
+      step = 'VM hooks'
       try {
         const hooks = await native.vmHooks()
         add('VM hooks', hooks?.ready === true, `${hooks?.state || 'PENDING'} · inst=${hooks?.instrumentation || '—'} am=${hooks?.activityManager || '—'} pm=${hooks?.packageManager || '—'}${hooks?.reason ? ` · ${hooks.reason}` : ''}`, 'device')
       } catch (e) { add('VM hooks', false, e?.message || e, 'device') }
     } catch (e) {
-      add('Quick test', false, e?.message || e)
+      add(step, false, e?.message || e)
     }
     const core = items.filter(i => i.group !== 'device')
     const gates = items.filter(i => i.group === 'device')
     const ok = core.every(i => i.ok)
-    const failed = core.filter(i => !i.ok).map(i => i.name)
-    const report = { at: Date.now(), ok, reason, items, core, gates, failed }
+    const failed = core.filter(i => !i.ok)
+    const firstFailed = failed[0]
+    const report = { at: Date.now(), ok, reason, items, core, gates, failed: failed.map(i => i.name) }
     setTestReport(report)
     const coreText = `${core.filter(i => i.ok).length}/${core.length}`
     const summary = ok
       ? `Quick test PASS · core ${coreText} · device gates ${gates.filter(i => i.ok).length}/${gates.length}`
-      : `Quick test FAIL · core ${coreText} · failed: ${failed.join(', ')}`
+      : `Quick test FAIL · core ${coreText} · ${firstFailed?.name || 'error'}: ${String(firstFailed?.detail || '').slice(0, 80)}`
     say(summary, ok ? 'ready' : 'error', ok ? 'pass' : 'fail')
     if (config.tempNotifications !== false) {
       native.showToast({ text: summary, kind: ok ? 'pass' : 'fail' }).catch(() => {})
-      native.showNotification({ title: 'D0J Test', text: summary, status: ok ? 'pass' : 'fail' }).catch(() => {})
+      native.showNotification({ title: 'SNAKE ENGINE Test', text: summary, status: ok ? 'pass' : 'fail' }).catch(() => {})
     }
     return report
   }
@@ -162,7 +173,7 @@ function Main() {
     bridge.stopSimulation()
     await native.stopSession().catch(() => {})
     await refreshNativeStatus()
-    say('D0J: safe stop · session halted', 'stopped')
+    say('SNAKE ENGINE: safe stop · session halted', 'stopped')
   }
 
   const handlePlay = async (forced) => {
@@ -513,7 +524,7 @@ function Main() {
     await native.setUnlocked(false)
     await native.stopSession().catch(() => {})
     setUnlocked(false)
-    setToast('D0J: app locked')
+    setToast('SNAKE ENGINE: app locked')
   }
 
   const refreshNativeStatus = async () => {
@@ -660,7 +671,13 @@ function Main() {
         const nextPatch = { ...patch }
         if (nextPatch.goldenTarget !== undefined) nextPatch.goldenTarget = Number(nextPatch.goldenTarget)
         if (nextPatch.power !== undefined) nextPatch.power = Number(nextPatch.power)
-        setConfigState(prev => ({ ...prev, ...nextPatch }))
+        setConfigState(prev => {
+          const changed = Object.keys(nextPatch).some(key => prev[key] !== nextPatch[key])
+          return changed ? { ...prev, ...nextPatch } : prev
+        })
+        if (nextPatch.autoPlay !== undefined && autoConfigRef.current.autoPlay !== nextPatch.autoPlay) {
+          handlersRef.current.handlePlay?.(nextPatch.autoPlay === true)
+        }
       }))
     })()
     return () => handles.forEach(handle => handle && handle.remove && handle.remove())
@@ -708,7 +725,7 @@ function Main() {
           testReport={testReport}
           runningScript={runningScript}
           runningLineScript={runningLineScript}
-          onClose={() => { native.showNotification({ title: 'D0J', text: 'Menu hidden · tap D0J button to open', status: 'running' }).catch(() => {}); window.close?.() }}
+          onClose={() => { native.showNotification({ title: 'SNAKE ENGINE', text: 'Menu hidden · tap the floating rail to open', status: 'running' }).catch(() => {}); window.close?.() }}
           onPlay={handlePlay}
           onStartSession={startSession}
           onRunScript={runRatimoda}
@@ -716,8 +733,19 @@ function Main() {
           onOpenTable={() => native.openApp().catch(() => {})}
           onRunLineScript={runLineTest}
           onRunQuickTest={runQuickTest}
+          liveOverlay={liveOverlay}
+          liveOverlayInfo={liveOverlayInfo}
+          onStartLiveOverlay={startLiveOverlay}
+          onStopLiveOverlay={stopLiveOverlay}
+          autoLive={autoLive}
+          autoLiveInfo={autoLiveInfo}
+          inputInfo={inputInfo}
+          onStartLiveAuto={startLiveAuto}
+          onStopLiveAuto={stopLiveAuto}
+          onRequestNotifications={requestNotifications}
+          onRequestUsageAccess={requestUsage}
         />
-        {toast ? <div className={`ingame-toast ${toastKind}`}><b>D0J ENGINE</b>{toast}</div> : null}
+        {toast ? <div className={`ingame-toast ${toastKind}`}><b>SNAKE ENGINE</b>{toast}</div> : null}
       </div>
     )
   }
@@ -752,6 +780,8 @@ function Main() {
       onStop={handleStop}
       onOpenTable={() => setTab('table')}
       onRequestOverlay={requestOverlay}
+      onRequestNotifications={requestNotifications}
+      onRequestUsageAccess={requestUsage}
       onRunQuickTest={runQuickTest}
     />
   )
@@ -816,7 +846,7 @@ function Main() {
   return (
     <>
       {tab === 'settings' ? settingsScreen : tab === 'table' ? tableScreen : homeScreen}
-      {toast ? <div className={`ingame-toast ${toastKind}`}><b>D0J ENGINE</b>{toast}</div> : null}
+      {toast ? <div className={`ingame-toast ${toastKind}`}><b>SNAKE ENGINE</b>{toast}</div> : null}
     </>
   )
 }
