@@ -459,7 +459,7 @@ public class D0JOverlayService extends Service {
                         return true;
                     case MotionEvent.ACTION_UP:
                         D0JPrefs.setInt(D0JOverlayService.this, D0JPrefs.FLOAT_X, menuParams.x);
-                        D0JPrefs.setInt(D0JPrefs.FLOAT_Y, menuParams.y);
+                        D0JPrefs.setInt(D0JOverlayService.this, D0JPrefs.FLOAT_Y, menuParams.y);
                         return true;
                 }
                 return false;

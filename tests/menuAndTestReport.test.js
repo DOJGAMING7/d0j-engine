@@ -74,6 +74,16 @@ test('hook report exposes redirect availability and per-hook detail', () => {
   assert.ok(app.includes('redirect=${res?.redirect'))
 })
 
+test('D0JPrefs writes always pass a context', () => {
+  const overlay = read('android/app/src/main/java/com/d0j/engine/D0JOverlayService.java')
+  const calls = overlay.match(/D0JPrefs\.set(?:Int|Boolean|String)\([^;]+;/g) || []
+  assert.ok(calls.length > 0)
+  for (const call of calls) {
+    const args = call.slice(call.indexOf('(') + 1, call.lastIndexOf(')')).split(',')
+    assert.equal(args.length, 3, `bad prefs call: ${call}`)
+  }
+})
+
 test('probe export is reachable from settings', () => {
   const settings = read('src/screens/Settings.jsx')
   assert.ok(settings.includes('COPY PROBE JSON'))
