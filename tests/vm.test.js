@@ -148,6 +148,8 @@ test('screen capture stays on-device and feeds live line geometry', () => {
   assert.ok(app.includes('screenCaptureRef.current'))
   assert.ok(app.includes("step = 'Screen capture bridge'"))
   assert.ok(app.includes("step = 'Ball detection'"))
+  assert.ok(app.includes('const capture = await native.startScreenCapture()'))
+  assert.ok(app.includes('LIVE OVERLAY: screen capture not active · start a session and allow capture'))
   assert.ok(app.includes('native.stopScreenCapture()'))
   assert.ok(manifest.includes('specialUse|mediaProjection'))
   assert.ok(overlay.includes('FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION'))

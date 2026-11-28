@@ -373,7 +373,7 @@ export default function Settings({
 
         <section className="panel">
           <h2>Live Overlay Lines · step 5</h2>
-          <p>Draws planner output over the game through the session overlay. Calibration maps measured table coordinates to your screen; no coordinates are guessed.</p>
+          <p>Draws planner output over the game through the session overlay. Screen capture is requested when a session starts; calibration maps measured table coordinates to your screen.</p>
           <div className="script-row">
             <div><b>Overlay</b><small>{liveOverlay ? 'running' : 'off'} · screen reading {screenCapture ? 'on' : 'off'} · {liveOverlayInfo?.ok ? `${liveOverlayInfo.balls} balls · ${liveOverlayInfo.source}${liveOverlayInfo.simulated ? ' (simulated)' : ''}` : (liveOverlayInfo?.reason || 'idle')}</small></div>
             <button className={`btn ${liveOverlay ? 'ghost' : 'primary'}`} onClick={liveOverlay ? onStopLiveOverlay : onStartLiveOverlay}>

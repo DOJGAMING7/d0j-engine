@@ -344,16 +344,14 @@ function Main() {
 
   const startLiveOverlay = async () => {
     if (liveActiveRef.current) return
+    if (!screenCaptureRef.current) {
+      say('LIVE OVERLAY: screen capture not active · start a session and allow capture', 'error')
+      return
+    }
     liveActiveRef.current = true
     liveLastRef.current = ''
     setLiveOverlay(true)
-    const capture = await native.startScreenCapture().catch(() => ({ ok: false, reason: 'SCREEN_PERMISSION_FAILED' }))
-    screenCaptureRef.current = capture?.ok === true
-    setScreenCapture(screenCaptureRef.current)
-    say(screenCaptureRef.current
-      ? 'LIVE OVERLAY: reading screen · allow capture if prompted'
-      : `LIVE OVERLAY: screen capture off (${capture?.reason || 'denied'}) · simulated state only`,
-    screenCaptureRef.current ? 'running' : 'error')
+    say('LIVE OVERLAY: reading screen', 'running')
     await liveTick()
   }
 
@@ -524,6 +522,17 @@ function Main() {
       await native.requestOverlayPermission()
       say('Enable Display over other apps for session overlay, then tap Launch again', 'error')
       return { ok: false, error: 'OVERLAY_PERMISSION_REQUIRED' }
+    }
+    // Ask for screen capture while the app is in the foreground. Requesting it
+    // from the floating menu after the game is open is unsafe on some ROMs.
+    if (native.isNative()) {
+      const capture = await native.startScreenCapture()
+        .catch(e => ({ ok: false, reason: String(e?.message || e) }))
+      screenCaptureRef.current = capture?.ok === true
+      setScreenCapture(screenCaptureRef.current)
+      if (!screenCaptureRef.current) {
+        say(`Screen capture off (${capture?.reason || 'denied'}) · live lines unavailable`, 'error')
+      }
     }
     const res = await native.startSession({ packageName: pkg, launchGame: true })
     if (res?.ok) {
