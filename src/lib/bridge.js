@@ -197,5 +197,5 @@ export function createBridge({ onLog = () => {} } = {}) {
     emit()
   }
 
-  return { api, log, getState: api.getState, setState: api.setState, subscribe: api.subscribe, startSimulation, stopSimulation, reset, getConfig: api.getConfig, setConfig: api.setConfig }
+  return { api, log, getState: api.getState, setState: api.setState, getTable: () => cloneTable(state.table || createDefaultTable()), subscribe: api.subscribe, startSimulation, stopSimulation, reset, getConfig: api.getConfig, setConfig: api.setConfig }
 }

@@ -8,6 +8,8 @@ export default function Settings({
   saveSettings,
   bundleStatus,
   nativeStatus,
+  sessionStatus,
+  testReport,
   onBack,
   onRunScript,
   runningScript,
@@ -15,11 +17,11 @@ export default function Settings({
   runningLineScript,
   scriptLog,
   onClearLog,
-  onLaunchGame,
+  onStartSession,
   onRequestOverlay,
-  onToggleFloating,
-  onRequestAccessibility,
-  onLockApp
+  onStopSession,
+  onLockApp,
+  onRunQuickTest
 }) {
   const [url, setUrl] = useState(settings.updateUrl || '')
   const [busy, setBusy] = useState(false)
@@ -57,7 +59,7 @@ export default function Settings({
   }
 
   return (
-    <main className="app-shell settings">
+    <main className="app-shell settings bw-home">
       <header className="topbar">
         <Logo compact />
         <button className="text-btn" onClick={onBack}>← Home</button>
@@ -65,23 +67,23 @@ export default function Settings({
 
       <div className="settings-body">
         <section className="panel">
-          <h2>NATIVE CONTROLS</h2>
-          <p>All actions run locally in the APK. No command server and no data upload.</p>
+          <h2>SESSION / NATIVE</h2>
+          <p>Session-scoped overlay. No Accessibility, no purchase guard (A1). Overlay permission is requested only for game session.</p>
           <div className="script-row">
-            <div><b>Launch 8 Ball Pool</b><small>{GAME_PACKAGES.eightBallPool} · {TARGET_BUILD}</small></div>
-            <button className="btn primary" onClick={() => onLaunchGame(GAME_PACKAGES.eightBallPool)}>Launch</button>
+            <div><b>Start 8BP session</b><small>{GAME_PACKAGES.eightBallPool} · {TARGET_BUILD}</small></div>
+            <button className="btn primary" onClick={() => onStartSession(GAME_PACKAGES.eightBallPool)}>Start</button>
           </div>
           <div className="script-row">
-            <div><b>Display over other apps</b><small>{nativeStatus?.overlay ? 'GRANTED' : 'Permission not granted'}</small></div>
+            <div><b>Overlay permission</b><small>{nativeStatus?.overlay ? 'GRANTED' : 'Not granted'}</small></div>
             <button className="btn ghost" onClick={onRequestOverlay}>Open</button>
           </div>
           <div className="script-row">
-            <div><b>Floating D0J button</b><small>Draggable · tap opens mod menu · {nativeStatus?.floating ? 'ON' : 'OFF'}</small></div>
-            <button className="btn primary" disabled={!nativeStatus?.overlay} onClick={onToggleFloating}>{nativeStatus?.floating ? 'Stop' : 'Start'}</button>
+            <div><b>Session</b><small>{nativeStatus?.sessionActive ? 'ACTIVE' : 'IDLE'} · {sessionStatus?.text || 'Ready'}</small></div>
+            <button className="btn ghost" onClick={onStopSession}>Stop</button>
           </div>
           <div className="script-row">
-            <div><b>Purchase guard</b><small>{nativeStatus?.accessibility ? 'Accessibility ON' : 'Enable accessibility to auto-BACK'}</small></div>
-            <button className="btn ghost" onClick={onRequestAccessibility}>Open</button>
+            <div><b>Quick test</b><small>{testReport?.ok ? 'PASS' : testReport?.items?.length ? 'FAIL' : 'Not run'} · non-blocking</small></div>
+            <button className="btn primary" onClick={onRunQuickTest}>Run</button>
           </div>
           <button className="btn ghost wide" onClick={onLockApp}>Lock app again (APK PASS)</button>
         </section>
@@ -101,16 +103,13 @@ export default function Settings({
           </div>
           <div className="meta-line">Installed: {bundleStatus?.version || 'built-in'} · {msg || 'idle'}</div>
           <div className="meta-line">SHA: {bundleStatus?.sha256 ? String(bundleStatus.sha256).slice(0, 16) + '…' : '—'}</div>
-          {settings.updateLog?.length ? (
-            <details><summary>Update history</summary>{settings.updateLog.map((l, i) => <div key={i} className="meta-line">{new Date(l.at).toLocaleString()} · {l.status} · {l.version || ''}</div>)}</details>
-          ) : null}
         </section>
 
         <section className="panel">
           <h2>Script Integration</h2>
-          <p>Scripts are versioned, hashed and run against the simulated bridge.</p>
+          <p>Scripts are versioned, hashed and run against the simulated/local bridge.</p>
           <div className="script-row">
-            <div><b>autoplay-ratimoda.js</b><small>8 Ball Pool {TARGET_BUILD} · v2.1.0 · state machine</small></div>
+            <div><b>autoplay-ratimoda.js</b><small>v2.1.0 · state machine</small></div>
             <button className="btn primary" disabled={runningScript} onClick={onRunScript}>{runningScript ? 'Running…' : 'Run test'}</button>
           </div>
           <div className="script-row">
@@ -124,11 +123,11 @@ export default function Settings({
         </section>
 
         <section className="panel">
-          <h2>Build Info</h2>
-          <div className="meta-line">D0J EnGine · v2.0.2 · private single-user build</div>
-          <div className="meta-line">Target reference: 8 Ball Pool {TARGET_BUILD}</div>
-          <div className="meta-line">No seller · no licence · no device binding · local APK pass only</div>
-          <div className="meta-line">State offsets/RVAs: <b>UNSET</b></div>
+          <h2>Build Info / Limits</h2>
+          <div className="meta-line">D0J EnGine · private single-user build</div>
+          <div className="meta-line">A1: No Accessibility, no purchase guard, no auto-back.</div>
+          <div className="meta-line">2B fallback: session-scoped overlay permission only when game session starts.</div>
+          <div className="meta-line">Prediction: demo table local/simulated. Real 8BP live lines need in-game bridge/patch.</div>
         </section>
       </div>
     </main>

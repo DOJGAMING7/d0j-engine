@@ -6,11 +6,13 @@ import android.content.SharedPreferences;
 public final class D0JPrefs {
     public static final String PREF_NAME = "d0j_native";
     public static final String UNLOCKED = "unlocked";
-    public static final String PURCHASE_GUARD = "purchase_guard";
-    public static final String OVERLAY_GUARD = "overlay_guard";
     public static final String FLOAT_X = "float_x";
     public static final String FLOAT_Y = "float_y";
     public static final String CONFIG_PREFIX = "config_";
+    public static final String SESSION_ACTIVE = "session_active";
+    public static final String SESSION_PACKAGE = "session_package";
+    public static final String SESSION_STATUS = "session_status";
+    public static final String SESSION_STATUS_TEXT = "session_status_text";
 
     private D0JPrefs() {}
 
@@ -36,6 +38,10 @@ public final class D0JPrefs {
 
     public static void setString(Context context, String key, String value) {
         prefs(context).edit().putString(key, value).apply();
+    }
+
+    public static String getString(Context context, String key, String fallback) {
+        return prefs(context).getString(key, fallback);
     }
 
     public static String getConfigString(Context context, String key, String fallback) {

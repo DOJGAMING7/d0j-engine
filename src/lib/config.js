@@ -21,6 +21,7 @@ export const DEFAULT_CONFIG = {
   autoPlay: false,
   autoPlayMode: 'Pro Fast',
   mode: 'Fast',
+  // Auto queue is intentionally hidden/removed from client UI (3A).
   autoQueue: false,
   queueMode: 'ONE',
   matchLimit: 3,
@@ -38,15 +39,18 @@ export const DEFAULT_CONFIG = {
   cleanUpShot: false,
   goldenTarget: 1,
   tableProfile: 'London',
-  purchaseGuard: true,
-  aimGuide: false,
-  targetPreview: false,
   guideOpacity: 70,
   power: 74,
   lineSpin: 0,
   lineOpacity: 85,
   sideSpin: 0,
-  topSpin: 0
+  topSpin: 0,
+  // Session/UX
+  sessionActive: false,
+  notificationsEnabled: true,
+  tempNotifications: true,
+  runTestOnLaunch: true,
+  blockLaunchOnFail: false
 }
 
 export function normalizeMode(value) {

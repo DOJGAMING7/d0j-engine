@@ -3,20 +3,20 @@ import { Capacitor, registerPlugin } from '@capacitor/core'
 const noopHandle = { remove: async () => {} }
 const webFallback = {
   ping: async () => ({ ok: false, native: false }),
-  hasOverlayPermission: async () => ({ granted: false }),
-  requestOverlayPermission: async () => ({ ok: false, error: 'WEB_ONLY' }),
+  hasOverlayPermission: async () => ({ granted: true, native: false }),
+  requestOverlayPermission: async () => ({ ok: true, native: false }),
   startFloating: async () => ({ ok: false, error: 'WEB_ONLY' }),
   stopFloating: async () => ({ ok: false, error: 'WEB_ONLY' }),
-  isFloatingActive: async () => ({ active: false }),
+  isFloatingActive: async () => ({ active: false, sessionActive: false }),
   launchGame: async packageName => ({ ok: false, error: 'WEB_ONLY', packageName }),
   openApp: async () => ({ ok: false, error: 'WEB_ONLY' }),
-  isAccessibilityEnabled: async () => ({ enabled: false }),
-  requestAccessibility: async () => ({ ok: false, error: 'WEB_ONLY' }),
-  setGuards: async () => ({ ok: false, error: 'WEB_ONLY' }),
-  getGuards: async () => ({ purchaseGuard: true, overlayGuard: true }),
-  syncConfig: async () => ({ ok: false, error: 'WEB_ONLY' }),
+  syncConfig: async () => ({ ok: true, native: false }),
   isUnlocked: async () => ({ unlocked: true }),
-  setUnlocked: async () => ({ ok: false, error: 'WEB_ONLY' }),
+  setUnlocked: async () => ({ ok: true, native: false }),
+  startSession: async () => ({ ok: false, error: 'WEB_ONLY' }),
+  stopSession: async () => ({ ok: false, error: 'WEB_ONLY' }),
+  getSessionStatus: async () => ({ active: false, sessionActive: false }),
+  showNotification: async () => ({ ok: true, native: false }),
   addListener: async () => noopHandle
 }
 
@@ -40,27 +40,27 @@ const native = {
     return { ...res, granted: res?.granted === true }
   },
   requestOverlayPermission: () => call('requestOverlayPermission'),
-  startFloating: () => call('startFloating'),
+  startFloating: options => call('startFloating', options || {}),
   stopFloating: () => call('stopFloating'),
+  startSession: options => call('startSession', options || {}),
+  stopSession: () => call('stopSession'),
   isFloatingActive: async () => {
     const res = await call('isFloatingActive')
-    return { ...res, active: res?.active === true }
+    return { ...res, active: res?.active === true, sessionActive: res?.sessionActive === true }
+  },
+  getSessionStatus: async () => {
+    const res = await call('getSessionStatus')
+    return { ...res, active: res?.active === true, sessionActive: res?.sessionActive === true }
   },
   launchGame: packageName => call('launchGame', { packageName: String(packageName || '') }),
   openApp: () => call('openApp'),
-  isAccessibilityEnabled: async () => {
-    const res = await call('isAccessibilityEnabled')
-    return { ...res, enabled: res?.enabled === true }
-  },
-  requestAccessibility: () => call('requestAccessibility'),
-  setGuards: options => call('setGuards', options || {}),
-  getGuards: () => call('getGuards'),
   syncConfig: config => call('syncConfig', config || {}),
   isUnlocked: async () => {
     const res = await call('isUnlocked')
     return { ...res, unlocked: res?.unlocked !== false }
   },
   setUnlocked: value => call('setUnlocked', { value: value === true }),
+  showNotification: payload => call('showNotification', payload || {}),
   addListener: (eventName, listener) => {
     if (!Capacitor.isNativePlatform()) return Promise.resolve(noopHandle)
     try {

@@ -13,7 +13,9 @@ import android.graphics.PixelFormat;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -32,387 +34,406 @@ import androidx.annotation.Nullable;
 import com.getcapacitor.JSObject;
 
 public class D0JOverlayService extends Service {
-    private static final String CHANNEL_ID = "d0j_floating";
-    private static final int NOTIFICATION_ID = 9101;
+    public static final String ACTION_START_SESSION = "com.d0j.engine.action.START_SESSION";
+    public static final String ACTION_STOP_SESSION = "com.d0j.engine.action.STOP_SESSION";
+    public static final String ACTION_UPDATE_STATUS = "com.d0j.engine.action.UPDATE_STATUS";
+    public static final String ACTION_OPEN_MENU = "com.d0j.engine.action.OPEN_MENU";
+    public static final String ACTION_OPEN_APP = "com.d0j.engine.action.OPEN_APP";
+
+    private static final String CHANNEL_ID = "d0j_session";
+    private static final int NOTIFICATION_ID = 7701;
     private static volatile boolean active = false;
 
+    private final Handler main = new Handler(Looper.getMainLooper());
     private WindowManager windowManager;
-    private View floatingButton;
-    private View menuPanel;
+    private View floatButton;
+    private LinearLayout panelView;
     private WindowManager.LayoutParams buttonParams;
     private WindowManager.LayoutParams panelParams;
+    private String sessionPackage = "com.miniclip.eightballpool";
+    private String statusText = "Session active";
+    private String statusState = "running";
+    private TextView statusLabel;
+    private TextView statusDot;
+    private final Runnable sessionWatchdog = new Runnable() {
+        @Override public void run() {
+            if (!active) return;
+            // Failsafe: if session flag was cleared externally, stop.
+            if (!D0JPrefs.getBoolean(D0JOverlayService.this, D0JPrefs.SESSION_ACTIVE, false)) {
+                stopSessionInternal();
+                return;
+            }
+            main.postDelayed(this, 4000);
+        }
+    };
 
-    public static boolean isActive() {
-        return active;
-    }
+    public static boolean isActive() { return active; }
 
-    @Override
-    public void onCreate() {
+    @Nullable @Override public IBinder onBind(Intent intent) { return null; }
+
+    @Override public void onCreate() {
         super.onCreate();
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-        startAsForeground();
-        addFloatingButton();
+        createChannel();
+    }
+
+    @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        String action = intent == null ? ACTION_START_SESSION : intent.getAction();
+        if (action == null) action = ACTION_START_SESSION;
+
+        switch (action) {
+            case ACTION_STOP_SESSION:
+                stopSessionInternal();
+                return START_NOT_STICKY;
+            case ACTION_UPDATE_STATUS:
+                handleStatusUpdate(intent);
+                if (!active) startSessionInternal(intent);
+                return START_STICKY;
+            case ACTION_OPEN_MENU:
+                if (!active) startSessionInternal(intent);
+                showPanel();
+                return START_STICKY;
+            case ACTION_OPEN_APP:
+                openApp();
+                return START_STICKY;
+            case ACTION_START_SESSION:
+            default:
+                startSessionInternal(intent);
+                return START_STICKY;
+        }
+    }
+
+    private void startSessionInternal(Intent intent) {
+        if (intent != null) {
+            String pkg = intent.getStringExtra("packageName");
+            if (pkg != null && !pkg.trim().isEmpty()) sessionPackage = pkg.trim();
+            String text = intent.getStringExtra("text");
+            if (text != null && !text.trim().isEmpty()) statusText = text.trim();
+            String state = intent.getStringExtra("status");
+            if (state != null && !state.trim().isEmpty()) statusState = state.trim();
+        }
+        D0JPrefs.setBoolean(this, D0JPrefs.SESSION_ACTIVE, true);
+        D0JPrefs.setString(this, D0JPrefs.SESSION_PACKAGE, sessionPackage);
+        startForegroundCompat();
+        if (floatButton == null) createFloatButton();
         active = true;
+        updateStatusUi();
+        main.removeCallbacks(sessionWatchdog);
+        main.postDelayed(sessionWatchdog, 4000);
+
+        boolean launchGame = intent != null && intent.getBooleanExtra("launchGame", false);
+        if (launchGame) launchPackage(sessionPackage);
     }
 
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        return START_STICKY;
+    private void handleStatusUpdate(Intent intent) {
+        if (intent == null) return;
+        String text = intent.getStringExtra("text");
+        String state = intent.getStringExtra("status");
+        if (text != null && !text.trim().isEmpty()) statusText = text.trim();
+        if (state != null && !state.trim().isEmpty()) statusState = state.trim();
+        D0JPrefs.setString(this, D0JPrefs.SESSION_STATUS, statusState);
+        D0JPrefs.setString(this, D0JPrefs.SESSION_STATUS_TEXT, statusText);
+        if (active) {
+            startForegroundCompat();
+            updateStatusUi();
+        }
     }
 
-    @Override
-    public void onDestroy() {
-        removeView(floatingButton);
-        removeView(menuPanel);
-        floatingButton = null;
-        menuPanel = null;
+    private void stopSessionInternal() {
         active = false;
-        super.onDestroy();
-    }
-
-    @Nullable
-    @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
-
-    private void startAsForeground() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            if (manager != null && manager.getNotificationChannel(CHANNEL_ID) == null) {
-                NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "D0J Floating", NotificationManager.IMPORTANCE_LOW);
-                channel.setDescription("Draggable D0J mod menu button");
-                manager.createNotificationChannel(channel);
-            }
-        }
-
-        Intent open = new Intent(this, MainActivity.class);
-        open.putExtra("openMenu", true);
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
-        PendingIntent pending = PendingIntent.getActivity(this, 0, open, flags);
-
-        Notification.Builder builder;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            builder = new Notification.Builder(this, CHANNEL_ID);
-        } else {
-            builder = new Notification.Builder(this);
-        }
-        Notification notification = builder
-                .setContentTitle("D0J EnGine")
-                .setContentText("Floating D0J button is active")
-                .setSmallIcon(android.R.drawable.stat_notify_more)
-                .setOngoing(true)
-                .setContentIntent(pending)
-                .build();
-
+        D0JPrefs.setBoolean(this, D0JPrefs.SESSION_ACTIVE, false);
+        D0JPrefs.setString(this, D0JPrefs.SESSION_STATUS, "stopped");
+        D0JPrefs.setString(this, D0JPrefs.SESSION_STATUS_TEXT, "Session stopped");
+        main.removeCallbacks(sessionWatchdog);
+        removePanel();
+        removeFloat();
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIFICATION_ID, notification, 0);
-            } else {
-                startForeground(NOTIFICATION_ID, notification);
-            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE);
+            else stopForeground(true);
         } catch (Exception ignored) {}
+        stopSelf();
     }
 
-    private void addFloatingButton() {
-        TextView button = new TextView(this);
-        button.setText("D0J");
-        button.setTextColor(Color.parseColor("#39FF14"));
-        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
-        button.setTypeface(Typeface.DEFAULT_BOLD);
-        button.setPadding(dp(15), dp(10), dp(15), dp(10));
-        button.setBackground(rounded("#080D08", "#39FF14", 22));
+    private void createChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return;
+        if (manager.getNotificationChannel(CHANNEL_ID) != null) return;
+        NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "D0J Session", NotificationManager.IMPORTANCE_LOW);
+        channel.setDescription("D0J EnGine session status and actions");
+        channel.setLightColor(Color.WHITE);
+        manager.createNotificationChannel(channel);
+    }
 
-        int x = D0JPrefs.getInt(this, D0JPrefs.FLOAT_X, 24);
-        int y = D0JPrefs.getInt(this, D0JPrefs.FLOAT_Y, dp(210));
-        buttonParams = overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, x, y, false);
-        windowManager.addView(button, buttonParams);
-        floatingButton = button;
+    private PendingIntent pi(String action, int req) {
+        Intent i = new Intent(this, D0JOverlayService.class).setAction(action);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+        return PendingIntent.getService(this, req, i, flags);
+    }
 
-        final int[] start = new int[2];
-        final int[] origin = new int[2];
-        final boolean[] moved = new boolean[1];
-        final long[] downAt = new long[1];
+    private PendingIntent appPi() {
+        Intent i = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("openMenu", true);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+        return PendingIntent.getActivity(this, 99, i, flags);
+    }
 
-        button.setOnTouchListener((v, event) -> {
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    start[0] = (int) event.getRawX();
-                    start[1] = (int) event.getRawY();
-                    origin[0] = buttonParams.x;
-                    origin[1] = buttonParams.y;
-                    moved[0] = false;
-                    downAt[0] = System.currentTimeMillis();
-                    return true;
-                case MotionEvent.ACTION_MOVE:
-                    int dx = (int) (event.getRawX() - start[0]);
-                    int dy = (int) (event.getRawY() - start[1]);
-                    if (Math.abs(dx) > 7 || Math.abs(dy) > 7) moved[0] = true;
-                    buttonParams.x = origin[0] + dx;
-                    buttonParams.y = origin[1] + dy;
-                    try { windowManager.updateViewLayout(button, buttonParams); } catch (Exception ignored) {}
-                    return true;
-                case MotionEvent.ACTION_UP:
-                    if (!moved[0] && System.currentTimeMillis() - downAt[0] < 600) togglePanel();
-                    D0JPrefs.setInt(this, D0JPrefs.FLOAT_X, buttonParams.x);
-                    D0JPrefs.setInt(this, D0JPrefs.FLOAT_Y, buttonParams.y);
-                    return true;
-                default:
-                    return false;
+    private void startForegroundCompat() {
+        Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? new Notification.Builder(this, CHANNEL_ID)
+                : new Notification.Builder(this);
+        b.setContentTitle("D0J EnGine active")
+                .setContentText(statusText)
+                .setSmallIcon(android.R.drawable.ic_menu_compass)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setContentIntent(appPi())
+                .addAction(new Notification.Action.Builder(null, "Open Menu", pi(ACTION_OPEN_MENU, 1)).build())
+                .addAction(new Notification.Action.Builder(null, "Stop", pi(ACTION_STOP_SESSION, 2)).build());
+        Notification n = b.build();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else {
+            startForeground(NOTIFICATION_ID, n);
+        }
+    }
+
+    private void createFloatButton() {
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        int size = dp(58);
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setGravity(Gravity.CENTER);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#121212"));
+        bg.setCornerRadius(dp(18));
+        bg.setStroke(dp(1), Color.parseColor("#E0E0E0"));
+        wrap.setBackground(bg);
+        wrap.setPadding(dp(6), dp(6), dp(6), dp(6));
+
+        TextView tv = new TextView(this);
+        tv.setText("D0J");
+        tv.setTextColor(Color.WHITE);
+        tv.setTypeface(Typeface.DEFAULT_BOLD);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        wrap.addView(tv, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : WindowManager.LayoutParams.TYPE_PHONE;
+        int flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
+        buttonParams = new WindowManager.LayoutParams(size, size, type, flags, PixelFormat.TRANSLUCENT);
+        buttonParams.gravity = Gravity.TOP | Gravity.START;
+        buttonParams.x = D0JPrefs.getInt(this, D0JPrefs.FLOAT_X, Math.max(0, dm.widthPixels - size - dp(12)));
+        buttonParams.y = D0JPrefs.getInt(this, D0JPrefs.FLOAT_Y, dp(120));
+
+        wrap.setOnTouchListener(new View.OnTouchListener() {
+            float downX, downY; int startX, startY; long downTime; boolean moved;
+            @Override public boolean onTouch(View v, MotionEvent e) {
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        downX = e.getRawX(); downY = e.getRawY();
+                        startX = buttonParams.x; startY = buttonParams.y;
+                        downTime = System.currentTimeMillis(); moved = false; return true;
+                    case MotionEvent.ACTION_MOVE:
+                        int dx = (int) (e.getRawX() - downX); int dy = (int) (e.getRawY() - downY);
+                        if (Math.abs(dx) > dp(4) || Math.abs(dy) > dp(4)) moved = true;
+                        buttonParams.x = Math.max(0, startX + dx);
+                        buttonParams.y = Math.max(0, startY + dy);
+                        try { windowManager.updateViewLayout(floatButton, buttonParams); } catch (Exception ignored) {}
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        D0JPrefs.setInt(D0JOverlayService.this, D0JPrefs.FLOAT_X, buttonParams.x);
+                        D0JPrefs.setInt(D0JOverlayService.this, D0JPrefs.FLOAT_Y, buttonParams.y);
+                        if (!moved && System.currentTimeMillis() - downTime < 350) togglePanel();
+                        return true;
+                }
+                return false;
             }
         });
+
+        floatButton = wrap;
+        try { windowManager.addView(floatButton, buttonParams); } catch (Exception ignored) { floatButton = null; }
     }
 
     private void togglePanel() {
-        if (menuPanel != null) {
-            removeView(menuPanel);
-            menuPanel = null;
-            return;
-        }
-        menuPanel = buildPanel();
-        windowManager.addView(menuPanel, panelParams);
-        D0JNativePlugin.notifyFloatingTap();
+        if (panelView != null) removePanel();
+        else showPanel();
     }
 
-    private View buildPanel() {
-        DisplayMetrics metrics = new DisplayMetrics();
-        windowManager.getDefaultDisplay().getMetrics(metrics);
-        int width = Math.min(metrics.widthPixels - dp(24), dp(380));
-        int height = Math.min(metrics.heightPixels - dp(80), dp(700));
-        int x = clamp(buttonParams.x - dp(10), dp(8), Math.max(dp(8), metrics.widthPixels - width - dp(8)));
-        int y = clamp(buttonParams.y + dp(62), dp(8), Math.max(dp(8), metrics.heightPixels - height - dp(8)));
-        panelParams = overlayParams(width, height, x, y, true);
+    private void showPanel() {
+        if (panelView != null) { updateStatusUi(); return; }
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        int width = Math.min(dm.widthPixels - dp(24), dp(420));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackground(rounded("#080D08", "#1F4A1F", 14));
-        root.setPadding(dp(10), dp(8), dp(10), dp(8));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#121212"));
+        bg.setCornerRadius(dp(20));
+        bg.setStroke(dp(1), Color.parseColor("#343434"));
+        root.setBackground(bg);
+        root.setPadding(dp(14), dp(12), dp(14), dp(14));
 
+        // Header
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = text("D0J · HOME MENU", 13, "#39FF14", true);
-        title.setPadding(dp(4), dp(4), dp(4), dp(6));
-        title.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        final int[] start = new int[2];
-        final int[] origin = new int[2];
-        title.setOnTouchListener((v, event) -> {
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    start[0] = (int) event.getRawX(); start[1] = (int) event.getRawY();
-                    origin[0] = panelParams.x; origin[1] = panelParams.y;
-                    return true;
-                case MotionEvent.ACTION_MOVE:
-                    panelParams.x = origin[0] + (int) (event.getRawX() - start[0]);
-                    panelParams.y = origin[1] + (int) (event.getRawY() - start[1]);
-                    try { windowManager.updateViewLayout(menuPanel, panelParams); } catch (Exception ignored) {}
-                    return true;
-                default:
-                    return false;
-            }
-        });
-        Button close = smallButton("✕", "#FF4D4D");
-        close.setOnClickListener(v -> togglePanel());
-        header.addView(title);
+        TextView title = new TextView(this);
+        title.setText("D0J ENGINE");
+        title.setTextColor(Color.WHITE);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        LinearLayout.LayoutParams tLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        header.addView(title, tLp);
+        Button close = smallBtn("X");
+        close.setOnClickListener(v -> removePanel());
         header.addView(close);
         root.addView(header);
+
+        statusLabel = new TextView(this);
+        statusLabel.setTextColor(Color.parseColor("#D0D0D0"));
+        statusLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        statusLabel.setPadding(0, dp(4), 0, dp(10));
+        root.addView(statusLabel);
 
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(content, new ScrollView.LayoutParams(ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
-        root.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        scroll.addView(content);
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Math.min(dm.heightPixels - dp(180), dp(520)));
+        root.addView(scroll, scrollLp);
 
-        addActions(content);
-        addSection(content, "BASIC SETTINGS");
-        addToggle(content, "Show lines", "showLines", true);
-        addToggle(content, "Keep lines after shot", "keepLines", true);
-        addToggle(content, "Power lock", "powerLock", false);
+        content.addView(section("Session"));
+        content.addView(actionRow("Open App", v -> openApp()));
+        content.addView(actionRow("Launch 8BP", v -> launchPackage(sessionPackage)));
+        content.addView(actionRow("Stop Session", v -> {
+            D0JNativePlugin.notifyMenuCommand("stop");
+            stopSessionInternal();
+        }));
 
-        addSection(content, "OTHER SETTINGS");
-        addPower(content);
-        addToggle(content, "Show pockets", "showPockets", true);
-        addToggle(content, "Purchase guard", "purchaseGuard", true);
+        content.addView(section("Actions"));
+        content.addView(actionRow("Run Quick Test", v -> D0JNativePlugin.notifyMenuCommand("runTest")));
+        content.addView(actionRow("Toggle Auto Play", v -> D0JNativePlugin.notifyMenuCommand("toggleAutoPlay")));
+        content.addView(actionRow("Open Mod Menu", v -> { openApp(); removePanel(); }));
 
-        addSection(content, "AUTO PLAY SETTINGS");
-        addToggle(content, "Enable auto play", "autoPlay", false);
-        addChoice(content, "Auto play mode", "autoPlayMode", new String[]{"Pro Fast", "Pro Player", "Fast Mode"}, "Pro Fast");
-        addToggle(content, "Failed break", "failedBreak", false);
+        content.addView(section("Info"));
+        content.addView(infoText("Home screen is clean. Cheats are in mod menu during session."));
+        content.addView(infoText("Live 8BP lines need in-game bridge/patch. Overlay shows session controls only."));
 
-        addSection(content, "8 BALL PLAY SETTINGS");
-        addToggle(content, "Prioritize 9th ball", "prioritize9", false);
-        addToggle(content, "Paralysis opponent turn", "paralysisOpponent", false);
-        addToggle(content, "Clean up shot", "cleanUpShot", false);
-
-        addSection(content, "GOLDEN SHOT SETTINGS");
-        addChoice(content, "Golden shot target", "goldenTarget", new String[]{"1", "2", "3", "4"}, "1");
-
-        addSection(content, "D0J AUTO QUEUE");
-        addToggle(content, "Auto queue", "autoQueue", false);
-        addChoice(content, "Queue count", "queueMode", new String[]{"ONE", "SESSION", "INFINITE"}, "ONE");
-
-        addSection(content, "TABLE / STATE");
-        addChoice(content, "Table profile", "tableProfile", new String[]{"London", "Moscow", "Beijing", "Barcelona"}, "London");
-
-        addSection(content, "D0J CONTROLS");
-        addCommandButton(content, "OPEN FULL MENU", "openFullMenu", "#39FF14");
-        addCommandButton(content, "LINE TEST", "openTable", "#B6FF9E");
-        addCommandButton(content, "STOP ALL", "stop", "#FF4D4D");
-
-        return root;
-    }
-
-    private void addActions(LinearLayout parent) {
-        LinearLayout row = row();
-        addCommandButton(row, "PLAY", "play", "#F5FFF5");
-        addCommandButton(row, "START", "start", "#F5FFF5");
-        addCommandButton(row, "AUTOPLAY", "autoplay", "#39FF14");
-        addCommandButton(row, "STOP", "stop", "#FF4D4D");
-        parent.addView(row);
-    }
-
-    private void addSection(LinearLayout parent, String title) {
-        TextView view = text(title, 11, "#B6FF9E", true);
-        view.setBackground(rounded("#102010", "#1F4A1F", 8));
-        view.setPadding(dp(8), dp(6), dp(8), dp(6));
-        parent.addView(view, rowParams());
-    }
-
-    private void addToggle(LinearLayout parent, String label, String key, boolean fallback) {
-        LinearLayout row = row();
-        TextView name = text(label, 11, "#F5FFF5", false);
-        name.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        Switch toggle = new Switch(this);
-        toggle.setChecked(D0JPrefs.getConfigBoolean(this, key, fallback));
-        toggle.setTextColor(Color.parseColor("#39FF14"));
-        toggle.setOnCheckedChangeListener((buttonView, checked) -> {
-            D0JPrefs.setString(this, D0JPrefs.CONFIG_PREFIX + key, String.valueOf(checked));
-            JSObject patch = new JSObject();
-            patch.put(key, checked);
-            D0JNativePlugin.notifyConfigChanged(patch);
-        });
-        row.addView(name);
-        row.addView(toggle);
-        parent.addView(row);
-    }
-
-    private void addChoice(LinearLayout parent, String label, String key, String[] options, String fallback) {
-        addSection(parent, label);
-        LinearLayout row = row();
-        String current = D0JPrefs.getConfigString(this, key, fallback);
-        for (String option : options) {
-            Button button = smallButton(option, current.equals(option) ? "#39FF14" : "#F5FFF5");
-            button.setOnClickListener(v -> {
-                D0JPrefs.setString(this, D0JPrefs.CONFIG_PREFIX + key, option);
-                JSObject patch = new JSObject();
-                patch.put(key, option);
-                D0JNativePlugin.notifyConfigChanged(patch);
-            });
-            row.addView(button);
-        }
-        parent.addView(row);
-    }
-
-    private void addPower(LinearLayout parent) {
-        TextView label = text("Default power " + D0JPrefs.getConfigInt(this, "power", 74) + "%", 11, "#F5FFF5", false);
-        parent.addView(label);
-        SeekBar seek = new SeekBar(this);
-        seek.setMax(100);
-        seek.setProgress(D0JPrefs.getConfigInt(this, "power", 74));
-        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                if (fromUser) label.setText("Default power " + progress + "%");
-            }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {
-                D0JPrefs.setString(D0JOverlayService.this, D0JPrefs.CONFIG_PREFIX + "power", String.valueOf(seekBar.getProgress()));
-                JSObject patch = new JSObject();
-                patch.put("power", seekBar.getProgress());
-                D0JNativePlugin.notifyConfigChanged(patch);
-            }
-        });
-        parent.addView(seek, rowParams());
-    }
-
-    private void addCommandButton(LinearLayout parent, String label, String command, String colour) {
-        Button button = smallButton(label, colour);
-        button.setOnClickListener(v -> D0JNativePlugin.notifyMenuCommand(command));
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        params.setMargins(dp(2), dp(2), dp(2), dp(2));
-        button.setLayoutParams(params);
-        parent.addView(button);
-    }
-
-    private LinearLayout row() {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackground(rounded("#0D160D", "#1F4A1F", 10));
-        row.setPadding(dp(8), dp(6), dp(8), dp(6));
-        return row;
-    }
-
-    private LinearLayout.LayoutParams rowParams() {
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.setMargins(0, dp(4), 0, dp(4));
-        return params;
-    }
-
-    private TextView text(String value, int sizeSp, String colour, boolean bold) {
-        TextView view = new TextView(this);
-        view.setText(value);
-        view.setTextColor(Color.parseColor(colour));
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);
-        view.setTypeface(Typeface.DEFAULT, bold ? Typeface.BOLD : Typeface.NORMAL);
-        return view;
-    }
-
-    private Button smallButton(String label, String colour) {
-        Button button = new Button(this);
-        button.setText(label);
-        button.setTextColor(Color.parseColor(colour));
-        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
-        button.setAllCaps(false);
-        button.setBackground(rounded("#0D160D", "#1F4A1F", 8));
-        button.setPadding(dp(6), dp(4), dp(6), dp(4));
-        button.setMinimumHeight(dp(34));
-        return button;
-    }
-
-    private GradientDrawable rounded(String background, String stroke, int radiusDp) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(Color.parseColor(background));
-        drawable.setCornerRadius(dp(radiusDp));
-        drawable.setStroke(Math.max(1, dp(1)), Color.parseColor(stroke));
-        return drawable;
-    }
-
-    private WindowManager.LayoutParams overlayParams(int width, int height, int x, int y, boolean focusable) {
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE;
-        int flags = WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
-        if (!focusable) flags |= WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
-        WindowManager.LayoutParams params = new WindowManager.LayoutParams(width, height, type, flags, PixelFormat.TRANSLUCENT);
-        params.gravity = Gravity.TOP | Gravity.START;
-        params.x = x;
-        params.y = y;
-        return params;
+        panelParams = new WindowManager.LayoutParams(width, WindowManager.LayoutParams.WRAP_CONTENT, type,
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT);
+        panelParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        panelParams.y = dp(80);
+        panelView = root;
+        try { windowManager.addView(panelView, panelParams); } catch (Exception ignored) { panelView = null; }
+        updateStatusUi();
     }
 
-    private void removeView(View view) {
-        if (view == null) return;
-        try { windowManager.removeView(view); } catch (Exception ignored) {}
+    private TextView section(String text) {
+        TextView tv = new TextView(this);
+        tv.setText(text.toUpperCase());
+        tv.setTextColor(Color.parseColor("#FFFFFF"));
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        tv.setTypeface(Typeface.DEFAULT_BOLD);
+        tv.setPadding(0, dp(10), 0, dp(6));
+        return tv;
     }
 
-    private int clamp(int value, int min, int max) {
-        return Math.max(min, Math.min(max, value));
+    private TextView infoText(String text) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextColor(Color.parseColor("#A8A8A8"));
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        tv.setPadding(0, dp(2), 0, dp(6));
+        return tv;
     }
 
-    private int dp(int value) {
-        return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, getResources().getDisplayMetrics()));
+    private Button smallBtn(String text) {
+        Button b = new Button(this);
+        b.setText(text);
+        b.setAllCaps(false);
+        b.setTextColor(Color.WHITE);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#222222"));
+        bg.setCornerRadius(dp(10));
+        bg.setStroke(dp(1), Color.parseColor("#444444"));
+        b.setBackground(bg);
+        b.setMinHeight(0); b.setMinimumHeight(0);
+        b.setPadding(dp(12), dp(8), dp(12), dp(8));
+        return b;
+    }
+
+    private View actionRow(String text, View.OnClickListener click) {
+        Button b = new Button(this);
+        b.setText(text);
+        b.setAllCaps(false);
+        b.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        b.setTextColor(Color.WHITE);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#1C1C1C"));
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), Color.parseColor("#333333"));
+        b.setBackground(bg);
+        b.setPadding(dp(14), dp(12), dp(14), dp(12));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = dp(8);
+        b.setLayoutParams(lp);
+        b.setOnClickListener(click);
+        return b;
+    }
+
+    private void updateStatusUi() {
+        if (statusLabel != null) statusLabel.setText(statusText + " • " + sessionPackage);
+    }
+
+    private void openApp() {
+        try {
+            Intent i = new Intent(this, MainActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            i.putExtra("openMenu", true);
+            startActivity(i);
+        } catch (Exception ignored) {}
+    }
+
+    private void launchPackage(String pkg) {
+        try {
+            Intent i = getPackageManager().getLaunchIntentForPackage(pkg);
+            if (i != null) {
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(i);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void removePanel() {
+        if (panelView != null) {
+            try { windowManager.removeView(panelView); } catch (Exception ignored) {}
+            panelView = null;
+            statusLabel = null;
+        }
+    }
+
+    private void removeFloat() {
+        if (floatButton != null) {
+            try { windowManager.removeView(floatButton); } catch (Exception ignored) {}
+            floatButton = null;
+        }
+    }
+
+    private int dp(int v) {
+        return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()));
+    }
+
+    @Override public void onDestroy() {
+        main.removeCallbacks(sessionWatchdog);
+        removePanel();
+        removeFloat();
+        active = false;
+        super.onDestroy();
     }
 }

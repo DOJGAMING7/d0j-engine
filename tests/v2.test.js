@@ -28,61 +28,59 @@ test('v2 config contains the reference feature names', () => {
   assert.equal(DEFAULT_CONFIG.paralysisOpponent, false)
   assert.equal(DEFAULT_CONFIG.cleanUpShot, false)
   assert.equal(DEFAULT_CONFIG.goldenTarget, 1)
-  assert.equal(DEFAULT_CONFIG.purchaseGuard, true)
+  assert.equal(DEFAULT_CONFIG.autoQueue, false)
+  assert.equal(DEFAULT_CONFIG.runTestOnLaunch, true)
+  assert.equal(DEFAULT_CONFIG.blockLaunchOnFail, false)
   assert.equal(GAME_PACKAGES.eightBallPool, 'com.miniclip.eightballpool')
   assert.equal(normalizeMode('Pro Fast'), 'Fast')
   assert.equal(normalizeMode('Pro Player'), 'Human')
   assert.equal(normalizeMode('Fast Mode'), 'Fast')
 })
 
-test('mod menu keeps the approved OCR labels and HOME MENU title', () => {
-  const source = read('src/components/ModMenu.jsx') + read('src/lib/config.js')
+test('mod menu keeps core cheats and clean session labels', () => {
+  const source = read('src/components/ModMenu.jsx') + read('src/lib/config.js') + read('src/screens/Home.jsx')
   const required = [
     'HOME MENU',
-    'BASIC SETTINGS', 'Show lines', 'Keep lines after shot', 'Power lock',
-    'OTHER SETTINGS', 'Default power', 'Show pockets',
-    'AUTO PLAY SETTINGS', 'Enable auto play', 'Auto play mode',
-    'Pro Fast', 'Pro Player', 'Fast Mode', 'Break settings', 'Failed break',
-    '8 BALL PLAY SETTINGS', 'Prioritize 9th ball', 'Paralysis opponent turn', 'Clean up shot',
-    'GOLDEN SHOT SETTINGS', 'Golden shot target',
-    'D0J AUTO QUEUE', 'ONE', 'SESSION', 'INFINITE',
-    'TABLE / STATE', 'phase', 'turn', 'result', 'power', 'aimError',
-    'PLAY', 'START', 'AUTOPLAY', 'STOP'
+    'Show lines', 'Keep lines after shot', 'Power lock',
+    'Default power', 'Show pockets',
+    'Enable auto play', 'Auto play mode',
+    'Pro Fast', 'Pro Player', 'Fast Mode', 'Failed break',
+    'Prioritize 9th ball', 'Paralysis opponent turn', 'Clean up shot',
+    'Golden shot target',
+    'LAUNCH 8BP', 'RUN TEST', 'STOP'
   ]
   for (const label of required) {
     assert.ok(source.includes(label), `missing mod menu label: ${label}`)
   }
-  assert.ok(source.indexOf('>PLAY<') < source.indexOf('>START<'))
-  assert.ok(source.indexOf('>START<') < source.indexOf('>AUTOPLAY<'))
-  assert.ok(source.indexOf('>AUTOPLAY<') < source.indexOf('>STOP<'))
+  assert.ok(!source.includes('D0J AUTO QUEUE'), 'auto queue UI should be removed')
+  assert.ok(!source.includes('Purchase guard'), 'purchase guard UI should be removed')
 })
 
 test('home screen has supported games and 8BP redirect target', () => {
   const source = read('src/screens/Home.jsx') + read('src/lib/config.js')
-  for (const label of ['HOME MENU', 'SUPPORTED GAMES', '8 BALL POOL', 'CARROM POOL', 'SOCCER STARS', 'Best For Carrom Pool']) {
+  for (const label of ['HOME MENU', 'SUPPORTED GAMES', '8 BALL POOL', 'CARROM POOL', 'SOCCER STARS']) {
     assert.ok(source.includes(label), `missing home label: ${label}`)
   }
   const config = read('src/lib/config.js')
   assert.ok(config.includes("eightBallPool: 'com.miniclip.eightballpool'"))
 })
 
-test('native Android layer declares overlay, accessibility guard and game package', () => {
+test('native Android layer declares session overlay without accessibility guard', () => {
   const manifest = read('android/app/src/main/AndroidManifest.xml')
   assert.ok(manifest.includes('android.permission.SYSTEM_ALERT_WINDOW'))
+  assert.ok(manifest.includes('android.permission.POST_NOTIFICATIONS'))
   assert.ok(manifest.includes('D0JOverlayService'))
-  assert.ok(manifest.includes('D0JGuardService'))
-  assert.ok(manifest.includes('BIND_ACCESSIBILITY_SERVICE'))
+  assert.ok(!manifest.includes('D0JGuardService'))
+  assert.ok(!manifest.includes('BIND_ACCESSIBILITY_SERVICE'))
   assert.ok(manifest.includes('com.miniclip.eightballpool'))
   assert.ok(manifest.includes('foregroundServiceType="specialUse"'))
 
   const overlay = read('android/app/src/main/java/com/d0j/engine/D0JOverlayService.java')
   assert.ok(overlay.includes('TYPE_APPLICATION_OVERLAY'))
-  assert.ok(overlay.includes('ACTION_UP'))
-  assert.ok(overlay.includes('togglePanel()'))
-
-  const guard = read('android/app/src/main/java/com/d0j/engine/D0JGuardService.java')
-  assert.ok(guard.includes('GLOBAL_ACTION_BACK'))
-  assert.ok(guard.includes('STRONG'))
+  assert.ok(overlay.includes('ACTION_START_SESSION'))
+  assert.ok(overlay.includes('ACTION_STOP_SESSION'))
+  assert.ok(overlay.includes('ACTION_UPDATE_STATUS'))
+  assert.ok(overlay.includes('stopSessionInternal'))
 })
 
 test('script manifest hashes match shipped scripts', () => {
@@ -126,17 +124,14 @@ test('D0JNative is registered before the Capacitor bridge is created', () => {
   assert.ok(plugin.includes('if (options == null) options = call.getData();'))
 })
 
-test('release version is bumped to 2.0.2', () => {
+test('release version is bumped to 2.1.0', () => {
   const pkg = JSON.parse(read('package.json'))
-  assert.equal(pkg.version, '2.0.2')
+  assert.equal(pkg.version, '2.1.0')
 
   const gradle = read('android/app/build.gradle')
-  assert.ok(gradle.includes('versionCode 5'))
-  assert.ok(gradle.includes('versionName "2.0.2"'))
-
-  const settings = read('src/screens/Settings.jsx')
-  assert.ok(settings.includes('v2.0.2'))
+  assert.ok(gradle.includes('versionCode 6'))
+  assert.ok(gradle.includes('versionName "2.1.0"'))
 
   const workflow = read('.github/workflows/build-apk.yml')
-  assert.ok(workflow.includes('tag_name: v2.0.2-${{ github.run_number }}'))
+  assert.ok(workflow.includes('tag_name: v2.1.0-${{ github.run_number }}'))
 })

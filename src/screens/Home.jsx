@@ -12,7 +12,7 @@ function GameCard({ game, onLaunch }) {
         <small>{game.note}</small>
       </span>
       <span className="game-badge">{game.badge}</span>
-      <span className="game-open">OPEN →</span>
+      <span className="game-open">OPEN</span>
     </button>
   )
 }
@@ -23,6 +23,8 @@ export default function Home({
   state,
   bundleStatus,
   nativeStatus,
+  sessionStatus,
+  testReport,
   menuSignal,
   onOpenSettings,
   onRunScript,
@@ -30,23 +32,21 @@ export default function Home({
   onRunLineScript,
   runningLineScript,
   onPlay,
-  onStart,
+  onStartSession,
   onStop,
   onOpenTable,
-  onLaunchGame,
   onRequestOverlay,
-  onToggleFloating,
-  onRequestAccessibility
+  onRunQuickTest
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const status = config.autoPlay ? 'AUTO PLAY' : 'READY'
+  const status = sessionStatus?.text || (config.autoPlay ? 'AUTO PLAY' : 'READY')
 
   useEffect(() => {
     if (menuSignal > 0) setMenuOpen(true)
   }, [menuSignal])
 
   return (
-    <main className="app-shell">
+    <main className="app-shell bw-home">
       <header className="topbar">
         <Logo compact />
         <div className="top-actions">
@@ -54,46 +54,42 @@ export default function Home({
         </div>
       </header>
 
-      <section className="home-head">
+      <section className="home-head clean">
         <small className="card-label">PRIVATE SINGLE-USER CLIENT</small>
         <h1>HOME MENU</h1>
-        <p>Local runtime · no server · target {TARGET_BUILD}</p>
-      </section>
-
-      <section className="game-panel">
-        <h2>SUPPORTED GAMES</h2>
-        {SUPPORTED_GAMES.map(game => <GameCard key={game.id} game={game} onLaunch={onLaunchGame} />)}
-        <div className="game-tip">Best For Carrom Pool</div>
+        <p>Clean client · session overlay · target {TARGET_BUILD}</p>
       </section>
 
       <section className="status-card compact-status">
         <div className="status-grid four">
           <div><small>STATUS</small><b>{status}</b></div>
-          <div><small>MODE</small><b>{config.autoPlayMode}</b></div>
-          <div><small>QUEUE</small><b>{config.autoQueue ? config.queueMode : 'OFF'}</b></div>
+          <div><small>SESSION</small><b>{nativeStatus?.sessionActive ? 'ACTIVE' : 'IDLE'}</b></div>
+          <div><small>OVERLAY</small><b>{nativeStatus?.overlay ? 'READY' : 'NEEDS PERM'}</b></div>
           <div><small>BUNDLE</small><b>{bundleStatus?.version || 'BUILT-IN'}</b></div>
         </div>
       </section>
 
-      <section className="action-grid home-actions">
-        <button className={config.autoPlay ? 'action-btn active' : 'action-btn'} onClick={onPlay}><b>PLAY</b><small>{config.autoPlay ? 'STOP AUTO' : 'AUTO PLAY'}</small></button>
-        <button className="action-btn" onClick={onStart}><b>START</b><small>OPEN 8BP</small></button>
-        <button className="action-btn green" disabled={runningScript} onClick={onRunScript}><b>AUTOPLAY</b><small>RATIMODA</small></button>
-        <button className="action-btn danger" onClick={onStop}><b>STOP</b><small>SAFE HALT</small></button>
+      <section className="game-panel">
+        <h2>SUPPORTED GAMES</h2>
+        {SUPPORTED_GAMES.map(game => <GameCard key={game.id} game={game} onLaunch={onStartSession} />)}
+      </section>
+
+      <section className="action-grid home-actions clean-actions">
+        <button className="action-btn" onClick={() => onStartSession(GAME_PACKAGES.eightBallPool)}><b>START</b><small>SESSION + 8BP</small></button>
+        <button className="action-btn" onClick={onRunQuickTest}><b>TEST</b><small>NO BLOCK</small></button>
+        <button className="action-btn" onClick={() => setMenuOpen(true)}><b>MENU</b><small>MOD MENU</small></button>
+        <button className="action-btn danger" onClick={onStop}><b>STOP</b><small>SESSION</small></button>
       </section>
 
       <section className="home-buttons">
-        <button className="menu-btn" onClick={() => setMenuOpen(true)}>OPEN MOD MENU</button>
-        <button className="menu-btn green" onClick={onOpenTable}>LINE PREDICTION TEST</button>
-        <button className="menu-btn" onClick={onRequestOverlay}>DISPLAY OVER GAME</button>
-        <button className="menu-btn green" disabled={!nativeStatus?.overlay} onClick={onToggleFloating}>{nativeStatus?.floating ? 'STOP FLOATING D0J' : 'START FLOATING D0J'}</button>
+        <button className="menu-btn" onClick={onRequestOverlay}>OVERLAY PERMISSION</button>
+        <button className="menu-btn" onClick={onOpenTable}>LINE PREDICTION TEST</button>
       </section>
 
       <footer className="footer-readout">
-        <span><i className="dot" /> {state.phase || 'YOUR_TURN'}</span>
+        <span><i className={`dot ${nativeStatus?.sessionActive ? 'on' : ''}`} /> {status}</span>
         <span>AUTO {config.autoPlay ? 'ON' : 'OFF'}</span>
-        <span>QUEUE {config.autoQueue ? config.queueMode : 'OFF'}</span>
-        <span>PKG {GAME_PACKAGES.eightBallPool.split('.').pop()}</span>
+        <span>TEST {testReport?.ok ? 'PASS' : testReport?.items?.length ? 'FAIL' : 'IDLE'}</span>
       </footer>
 
       {menuOpen && (
@@ -102,19 +98,18 @@ export default function Home({
           setConfig={setConfig}
           state={state}
           nativeStatus={nativeStatus}
+          sessionStatus={sessionStatus}
+          testReport={testReport}
           runningScript={runningScript}
           runningLineScript={runningLineScript}
           onClose={() => setMenuOpen(false)}
           onPlay={onPlay}
-          onStart={onStart}
+          onStartSession={() => onStartSession(GAME_PACKAGES.eightBallPool)}
           onRunScript={onRunScript}
           onStop={onStop}
           onOpenTable={() => { setMenuOpen(false); onOpenTable() }}
           onRunLineScript={onRunLineScript}
-          onLaunchGame={onLaunchGame}
-          onRequestOverlay={onRequestOverlay}
-          onToggleFloating={onToggleFloating}
-          onRequestAccessibility={onRequestAccessibility}
+          onRunQuickTest={onRunQuickTest}
         />
       )}
     </main>

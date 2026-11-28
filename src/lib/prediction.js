@@ -105,12 +105,24 @@ function curveBetween(a, b, spin, amount = 26) {
 }
 
 export function computePrediction(tableInput, aimPoint, options = {}) {
-  const table = cloneTable(tableInput)
-  const origin = table.cue
-  const aim = clampPoint(aimPoint || { x: origin.x, y: origin.y - 100 }, table)
+  // Flexible signature:
+  // computePrediction({ table, aim, power, spin })
+  // computePrediction(table, aimPoint, { power, spin })
+  let tableSrc = tableInput
+  let aimSrc = aimPoint
+  let opts = options
+  if (tableInput && tableInput.table && !Array.isArray(tableInput.balls)) {
+    tableSrc = tableInput.table
+    aimSrc = tableInput.aim || tableInput.aimPoint || aimPoint
+    opts = { ...tableInput, ...options }
+  }
+
+  const table = cloneTable(tableSrc)
+  const origin = table.cue || { x: 300, y: 660 }
+  const aim = clampPoint(aimSrc || { x: origin.x, y: origin.y - 100 }, table)
   const dir = unit(sub(aim, origin))
-  const spin = Number(options.spin ?? options.sideSpin ?? 0)
-  const power = Math.max(0, Math.min(100, Number(options.power ?? 74)))
+  const spin = Number(opts.spin ?? opts.sideSpin ?? opts.lineSpin ?? 0)
+  const power = Math.max(0, Math.min(100, Number(opts.power ?? 74)))
   const guideLength = Math.min(table.height || 900, 120 + power * 5.4)
 
   const target = findTargetBall(table, origin, dir)
@@ -120,8 +132,11 @@ export function computePrediction(tableInput, aimPoint, options = {}) {
   const aimEnd = ghost || clampPoint(add(origin, scale(dir, guideLength)), table)
   const pocket = target ? choosePocket(table, target, dir) : null
   const targetEnd = pocket || clampPoint(add(aimEnd, scale(dir, guideLength)), table)
+  const cuePath = curveBetween(origin, aimEnd, spin)
+  const targetPath = target ? curveBetween(target, targetEnd, -spin * 0.35, 12) : []
 
   return {
+    ok: cuePath.length > 1,
     aim,
     dir,
     origin,
@@ -130,9 +145,11 @@ export function computePrediction(tableInput, aimPoint, options = {}) {
     pocket,
     power,
     spin,
-    cuePath: curveBetween(origin, aimEnd, spin),
-    targetPath: target ? curveBetween(target, targetEnd, -spin * 0.35, 12) : [],
-    guideLength
+    cuePath,
+    path: cuePath,
+    targetPath,
+    guideLength,
+    reason: target ? null : 'NO_TARGET'
   }
 }
 
