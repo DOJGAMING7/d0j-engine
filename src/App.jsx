@@ -511,23 +511,25 @@ function Main() {
       .catch(e => ({ ok: false, error: String(e?.message || e) }))
     if (session?.ok) setConfigState(prev => ({ ...prev, sessionActive: true }))
 
+    // Default: open the real installed game externally. The mod menu lives in
+    // this client and is honestly labelled as a local preview. In-window
+    // hosting is opt-in only (diagnostics), so a normal START never causes a
+    // failed host attempt, black screen, or launcher bounce.
     let hosted = null
-    if (native.isNative()) {
+    if (native.isNative() && config.inWindowHosting === true) {
       hosted = await native.vmLaunch(pkg, discovery?.launchActivity || '').catch(() => ({ ok: false }))
-    }
-    if (hosted?.ok && hosted?.started === true) {
-      say(`In-window hosting requested for ${game?.name || pkg} · waiting for confirmation`, 'starting')
-      await refreshNativeStatus()
-      if (config.runTestOnLaunch) runQuickTest('launch').catch(() => {})
-      return { ...session, hosted: true, launched: true, discovery }
+      if (hosted?.ok && hosted?.started === true) {
+        say(`In-window hosting requested for ${game?.name || pkg} · waiting for confirmation`, 'starting')
+        await refreshNativeStatus()
+        if (config.runTestOnLaunch) runQuickTest('launch').catch(() => {})
+        return { ...session, hosted: true, launched: true, discovery }
+      }
     }
 
-    // Honest fallback: the real installed game still opens through this client,
-    // but we do not claim an in-window game when the framework hook is not ready.
     const launch = await native.launchGame(pkg)
-    const reason = hosted?.reason || hosted?.state || session?.error || launch?.error || 'unknown'
+    const reason = hosted?.reason || hosted?.state || session?.error || launch?.error || 'external session'
     say(launch?.ok
-      ? `Session active · ${game?.name || pkg} launched externally (hosted: ${reason})`
+      ? `Session active · ${game?.name || pkg} opened externally · mod menu in SNAKE ENGINE (local preview)`
       : `Launch failed: ${reason}`,
     launch?.ok ? 'ready' : 'error')
     await refreshNativeStatus()
