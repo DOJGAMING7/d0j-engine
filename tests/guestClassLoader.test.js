@@ -29,15 +29,25 @@ test('both prepare and launch use the guest-first loader', () => {
   assert.ok(core.includes('CLASSLOADER_GUEST_FIRST'))
 })
 
-test("the game's manifest theme is applied before onCreate", () => {
+test("the game's manifest theme is applied from its own resources", () => {
   const host = read(vmDir + 'VMGameHost.java')
-  assert.match(host, /private static void installTheme\(Activity activity, Prepared prepared\)/)
+  assert.match(host, /private static void installTheme\(Activity activity, Prepared prepared, Context report\)/)
   assert.match(host, /getActivityInfo\(\s*new ComponentName\(prepared\.packageName, target\)/)
   assert.match(host, /prepared\.info\.theme/)
-  assert.match(host, /setField\(activity, "mTheme", null\)/)
-  assert.match(host, /activity\.setTheme\(theme\)/)
-  assert.match(host, /THEME_APPLIED/)
-  assert.match(host, /installTheme\(activity, prepared\)/)
+  // A theme must be built from the game's Resources, not copied from our app.
+  assert.match(host, /prepared\.resources\.newTheme\(\)/)
+  assert.match(host, /gameTheme\.applyStyle\(theme, true\)/)
+  assert.match(host, /setField\(activity, "mTheme", gameTheme\)/)
+  assert.match(host, /setField\(activity, "mThemeResource", theme\)/)
+  assert.ok(!host.includes('activity.setTheme(theme)'), 'no setTheme copy from our resources')
+  // Diagnostics must be visible in our storage, with failures surfaced.
+  assert.match(host, /VMHosting\.markStage\(report, "THEME_ID:" \+ theme\)/)
+  assert.match(host, /VMHosting\.markStage\(report, "THEME_APPLIED:" \+ theme\)/)
+  assert.match(host, /VMHosting\.markStage\(report, "THEME_FAIL:" \+ describe\(e\)\)/)
+  assert.match(host, /installTheme\(activity, prepared, report\)/)
+  // The delegate reads the base context's theme too.
+  assert.match(host, /private Resources\.Theme theme;/)
+  assert.match(host, /@Override public Resources\.Theme getTheme\(\)/)
 })
 
 test('the game Application.onCreate is invoked before the Activity', () => {

@@ -131,7 +131,11 @@ public final class VMGameHost {
             // against the wrong resource table.
             try { installInflater(activity, gameBase); } catch (Throwable ignored) { }
             try { installPackageInfo(activity, prepared); } catch (Throwable ignored) { }
-            try { installTheme(activity, prepared); } catch (Throwable ignored) { }
+            try {
+                installTheme(activity, prepared, report);
+            } catch (Throwable e) {
+                VMHosting.markStage(report, "THEME_FAIL:" + describe(e));
+            }
             VMHosting.markStage(report, "ACTIVITY_CONTEXT_SWAPPED");
             return true;
         } catch (Throwable e) {
@@ -157,7 +161,8 @@ public final class VMGameHost {
     }
 
     /** Apply the game's manifest theme so AppCompat finds its own theme attrs. */
-    private static void installTheme(Activity activity, Prepared prepared) throws Exception {
+    private static void installTheme(Activity activity, Prepared prepared, Context report)
+            throws Exception {
         int theme = 0;
         Intent intent = activity.getIntent();
         String target = intent == null ? null : intent.getStringExtra("vmActivity");
@@ -169,15 +174,21 @@ public final class VMGameHost {
             }
         } catch (Throwable ignored) { }
         if (theme == 0) theme = prepared.info.theme;
-        if (theme != 0) {
-            // attach() already created a Theme from our resources; clear it so
-            // setTheme() rebuilds one from the game's resources.
-            try { setField(activity, "mTheme", null); } catch (Throwable ignored) { }
-            activity.setTheme(theme);
-            VMHosting.markStage(prepared.context, "THEME_APPLIED:" + theme);
-        } else {
-            VMHosting.markStage(prepared.context, "THEME_MISSING");
+        // Diagnostics go to OUR storage, never the game's private files.
+        VMHosting.markStage(report, "THEME_ID:" + theme);
+        if (theme == 0) {
+            VMHosting.markStage(report, "THEME_MISSING");
+            return;
         }
+        // Do not call Activity.setTheme(): it copies the base ContextImpl's
+        // theme, which still belongs to OUR resource table. Build a fresh theme
+        // from the game's Resources and install it directly on the Activity.
+        Resources.Theme gameTheme = prepared.resources.newTheme();
+        gameTheme.applyStyle(theme, true);
+        setField(activity, "mTheme", gameTheme);
+        setField(activity, "mThemeResource", theme);
+        prepared.context.theme = gameTheme;
+        VMHosting.markStage(report, "THEME_APPLIED:" + theme);
     }
 
     private static void installInflater(Activity activity, Context gameBase) throws Exception {
@@ -290,6 +301,7 @@ public final class VMGameHost {
         private final ClassLoader loader;
         private final Resources resources;
         private Application application;
+        private Resources.Theme theme;
 
         GameContext(Context base, String packageName, ApplicationInfo info,
                     ClassLoader loader, Resources resources) {
@@ -301,6 +313,9 @@ public final class VMGameHost {
         }
 
         @Override public Resources getResources() { return resources; }
+        @Override public Resources.Theme getTheme() {
+            return theme == null ? super.getTheme() : theme;
+        }
         @Override public AssetManager getAssets() { return resources.getAssets(); }
         @Override public String getPackageName() { return packageName; }
         @Override public ApplicationInfo getApplicationInfo() { return info; }
