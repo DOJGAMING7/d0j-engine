@@ -57,8 +57,28 @@ public final class VMGameHost {
         try {
             ApplicationInfo info = host.getPackageManager().getApplicationInfo(packageName, 0);
             stages.append("|PACKAGE_INFO_OK");
-            Resources resources = buildResources(host, apkPaths, stages);
-            GameContext context = new GameContext(host, packageName, info, loader, resources);
+
+            // The framework builds Resources from ALL installed APK paths
+            // (base + splits) with exactly the IDs the game was compiled
+            // against. A hand-built AssetManager only sees the paths we pass
+            // and resolves layout IDs to the wrong type (NotFoundException).
+            Resources resources = null;
+            Context gameContext = null;
+            try {
+                gameContext = host.createPackageContext(packageName, Context.CONTEXT_IGNORE_SECURITY);
+                resources = gameContext.getResources();
+                stages.append("|RESOURCES_SOURCE:GAME_CONTEXT");
+            } catch (Throwable e) {
+                stages.append("|GAME_CONTEXT_FAIL:").append(describe(e));
+            }
+            if (resources == null) {
+                resources = buildResources(host, apkPaths, stages);
+                stages.append("|RESOURCES_SOURCE:ASSET_PATH");
+            }
+
+            GameContext context = new GameContext(
+                    gameContext == null ? host : gameContext,
+                    packageName, info, loader, resources);
             Application application = buildApplication(info, loader, context, stages);
             context.application = application;
             Prepared prepared = new Prepared(packageName, resources, application, context,
@@ -69,6 +89,7 @@ public final class VMGameHost {
         } catch (Throwable e) {
             String stage = stages + "|HOST_PREPARE_FAIL:" + describe(e);
             VMHosting.markStage(host, stage);
+            VMHosting.markError(host, "HOST_PREPARE_FAIL\n" + stack(e));
             return null;
         }
     }

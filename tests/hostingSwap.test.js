@@ -56,6 +56,26 @@ test('diagnostics keep every failure and use our own app context', () => {
   assert.match(hook, /if \(!"onDestroy"\.equals\(stage\)\)/)
 })
 
+test('game Resources come from the installed app, not a hand-built table', () => {
+  const host = read(vmDir + 'VMGameHost.java')
+  assert.match(host, /createPackageContext\(packageName, Context\.CONTEXT_IGNORE_SECURITY\)/)
+  assert.match(host, /resources = gameContext\.getResources\(\)/)
+  assert.match(host, /RESOURCES_SOURCE:GAME_CONTEXT/)
+  assert.match(host, /RESOURCES_SOURCE:ASSET_PATH/)
+  assert.match(host, /GAME_CONTEXT_FAIL/)
+  assert.match(host, /new GameContext\(\s*gameContext == null \? host : gameContext/)
+})
+
+test('a stale host panel is removed when hosting fails', () => {
+  const proxy = read(vmDir + 'VMProxyActivity.java')
+  assert.match(proxy, /CopyOnWriteArrayList/)
+  assert.match(proxy, /public static void finishAll\(\)/)
+  assert.match(proxy, /LIVE\.add\(new WeakReference<VMProxyActivity>\(this\)\)/)
+
+  const hook = read(vmDir + 'HookInstrumentation.java')
+  assert.match(hook, /VMProxyActivity\.finishAll\(\)/)
+})
+
 test('status never claims a confirmed in-window host before proof', () => {
   const app = read('src/App.jsx')
   assert.ok(app.includes('In-window hosting requested for'))

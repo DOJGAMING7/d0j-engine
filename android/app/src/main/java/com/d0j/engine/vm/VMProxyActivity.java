@@ -11,16 +11,33 @@ import android.widget.TextView;
 
 import com.d0j.engine.D0JGameHud;
 
+import java.lang.ref.WeakReference;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
 /**
  * Host entry point. It never pretends to be the game: it prepares the installed
  * APK's classloader, attempts a real Activity substitution inside this process,
  * and falls back to an honest status panel with in-window controls.
  */
 public class VMProxyActivity extends Activity {
+    private static final List<WeakReference<VMProxyActivity>> LIVE =
+            new CopyOnWriteArrayList<WeakReference<VMProxyActivity>>();
+
     protected int processIndex() { return 0; }
+
+    /** Called on hosting failure so the user never returns to a stale panel. */
+    public static void finishAll() {
+        for (WeakReference<VMProxyActivity> ref : LIVE) {
+            VMProxyActivity activity = ref.get();
+            if (activity != null) activity.finish();
+        }
+        LIVE.clear();
+    }
 
     @Override protected void onResume() {
         super.onResume();
+        LIVE.add(new WeakReference<VMProxyActivity>(this));
         VMActivityInputInjector.bind(this);
     }
 
@@ -81,6 +98,9 @@ public class VMProxyActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        for (WeakReference<VMProxyActivity> ref : LIVE) {
+            if (ref.get() == this) { LIVE.remove(ref); break; }
+        }
         D0JGameHud.detach(this);
         super.onDestroy();
     }

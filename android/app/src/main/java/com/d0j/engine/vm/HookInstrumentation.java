@@ -186,6 +186,9 @@ public final class HookInstrumentation extends Instrumentation {
     /** Persist once and tell the client process so it can fall back honestly. */
     private static void hostingFailed(Context context, String pkg, String detail) {
         VMHosting.markDisabled(context, detail);
+        // Remove any stale host panel so returning to SNAKE does not show a
+        // mini HUD / white menu with no game behind it.
+        try { VMProxyActivity.finishAll(); } catch (Throwable ignored) { }
         if (noticeSent) return;
         noticeSent = true;
         try {
