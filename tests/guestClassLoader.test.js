@@ -37,7 +37,9 @@ test("the game's manifest theme is applied from its own resources", () => {
   // A theme must be built from the game's Resources, not copied from our app.
   assert.match(host, /prepared\.resources\.newTheme\(\)/)
   assert.match(host, /gameTheme\.applyStyle\(theme, true\)/)
-  assert.match(host, /setField\(activity, "mTheme", gameTheme\)/)
+  assert.match(host, /setThemeField\(activity, gameTheme, report\)/)
+  assert.match(host, /private static void setThemeField\(Object target, Resources\.Theme value, Context report\)/)
+  assert.match(host, /Resources\.Theme\.class\.equals\(field\.getType\(\)\)/)
   assert.match(host, /setField\(activity, "mThemeResource", theme\)/)
   assert.ok(!host.includes('activity.setTheme(theme)'), 'no setTheme copy from our resources')
   // Diagnostics must be visible in our storage, with failures surfaced.

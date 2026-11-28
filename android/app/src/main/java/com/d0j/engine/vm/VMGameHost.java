@@ -185,8 +185,10 @@ public final class VMGameHost {
         // from the game's Resources and install it directly on the Activity.
         Resources.Theme gameTheme = prepared.resources.newTheme();
         gameTheme.applyStyle(theme, true);
-        setField(activity, "mTheme", gameTheme);
-        setField(activity, "mThemeResource", theme);
+        // Android 16 hides ContextThemeWrapper.mTheme from getDeclaredField(name),
+        // so locate the Theme field by type instead.
+        setThemeField(activity, gameTheme, report);
+        try { setField(activity, "mThemeResource", theme); } catch (Throwable ignored) { }
         if (prepared.context instanceof GameContext) {
             ((GameContext) prepared.context).theme = gameTheme;
         }
@@ -214,6 +216,26 @@ public final class VMGameHost {
         getInfo.setAccessible(true);
         Object loaded = getInfo.invoke(thread, prepared.context.getApplicationInfo(), defaultCompat.get(null));
         setField(activity, "mPackageInfo", loaded);
+    }
+
+    /** Locate the hidden Theme field by type; newer Android hides it by name. */
+    private static void setThemeField(Object target, Resources.Theme value, Context report)
+            throws Exception {
+        Class<?> type = target.getClass();
+        while (type != null) {
+            for (Field field : type.getDeclaredFields()) {
+                if (Resources.Theme.class.equals(field.getType())) {
+                    try {
+                        field.setAccessible(true);
+                        field.set(target, value);
+                        VMHosting.markStage(report, "THEME_FIELD:" + field.getName());
+                        return;
+                    } catch (Throwable ignored) { }
+                }
+            }
+            type = type.getSuperclass();
+        }
+        throw new NoSuchFieldException("Resources.Theme field");
     }
 
     private static void setField(Object target, String name, Object value) throws Exception {
