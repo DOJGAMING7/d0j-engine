@@ -47,7 +47,9 @@ public class SystemCallProvider extends ContentProvider {
             if ("status".equals(op)) {
                 putJson(out, core.status());
             } else if ("list".equals(op)) {
-                out.putString("json", core.list().toString());
+                JSONObject listing = new JSONObject();
+                listing.put("apps", core.list());
+                putJson(out, listing);
             } else if ("install".equals(op)) {
                 putJson(out, core.install(args.getString("apkPath", "")).toJson());
             } else if ("launch".equals(op)) {

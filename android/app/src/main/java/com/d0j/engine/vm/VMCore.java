@@ -112,6 +112,47 @@ public final class VMCore {
         }
     }
 
+    /**
+     * Never pick a helper activity (Facebook tabs, login, ads, settings) just
+     * because its name contains "main". Prefer explicit launcher names and let
+     * the user override the result from Settings.
+     */
+    private static String chooseLaunchActivity(List<String> activities) {
+        if (activities == null || activities.isEmpty()) return "";
+        String[] rejected = {
+                "facebook", "customtab", "custom_tab", "login", "auth", "web", "browser",
+                "advert", "ads", "analytics", "privacy", "policy", "terms", "settings",
+                "crash", "debug", "test", "deeplink", "deep_link", "share", "invite",
+                "billing", "purchase", "notification", "gauth", "google"
+        };
+        String[] preferred = {
+                "launcheractivity", "splashactivity", "startactivity", "mainactivity",
+                "gameactivity", "lobbyactivity", "eightballpoolactivity"
+        };
+        List<String> candidates = new ArrayList<String>();
+        for (String name : activities) {
+            if (name == null || name.trim().isEmpty()) continue;
+            String lower = name.toLowerCase();
+            boolean bad = false;
+            for (String word : rejected) {
+                if (lower.contains(word)) { bad = true; break; }
+            }
+            if (!bad) candidates.add(name);
+        }
+        if (candidates.isEmpty()) return activities.get(0);
+        for (String good : preferred) {
+            for (String name : candidates) {
+                if (name.toLowerCase().endsWith(good)) return name;
+            }
+        }
+        for (String name : candidates) {
+            String lower = name.toLowerCase();
+            if (lower.contains("main") || lower.contains("launch") || lower.contains("splash")
+                    || lower.contains("game")) return name;
+        }
+        return candidates.get(0);
+    }
+
     public VMRegisteredApp install(String apkPath) throws VMException {
         if (apkPath == null || apkPath.trim().isEmpty()) {
             throw new VMException("NO_APK_PATH", "APK path is empty");
@@ -143,16 +184,9 @@ public final class VMCore {
             for (ActivityInfo activity : info.activities) {
                 if (activity.name == null || activity.name.trim().isEmpty()) continue;
                 entry.activities.add(activity.name);
-                String lower = activity.name.toLowerCase();
-                if (entry.launchActivity.isEmpty()
-                        && (lower.contains("main") || lower.contains("launch") || lower.contains("splash"))) {
-                    entry.launchActivity = activity.name;
-                }
             }
         }
-        if (entry.launchActivity.isEmpty() && !entry.activities.isEmpty()) {
-            entry.launchActivity = entry.activities.get(0);
-        }
+        entry.launchActivity = chooseLaunchActivity(entry.activities);
 
         apps.put(entry.packageName, entry);
         saveRegistry();

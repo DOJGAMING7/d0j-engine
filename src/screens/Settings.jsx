@@ -50,6 +50,8 @@ export default function Settings({
   const [msg, setMsg] = useState('')
   const [vmPath, setVmPath] = useState('')
   const [vmInfo, setVmInfo] = useState(null)
+  const [vmApps, setVmApps] = useState([])
+  const [vmActivity, setVmActivity] = useState('')
   const [hookInfo, setHookInfo] = useState(null)
   const [liveInfo, setLiveInfo] = useState(null)
   const [bindingInfo, setBindingInfo] = useState(null)
@@ -63,9 +65,10 @@ export default function Settings({
   const [vmBusy, setVmBusy] = useState(false)
 
   useEffect(() => {
-    Promise.all([native.vmStatus(), native.vmHooks(), native.vmState(), native.vmBindings(), native.vmProbe()])
-      .then(([status, hooks, state, bindings, probe]) => {
+    Promise.all([native.vmStatus(), native.vmHooks(), native.vmState(), native.vmBindings(), native.vmProbe(), native.vmList()])
+      .then(([status, hooks, state, bindings, probe, list]) => {
         setVmInfo(status)
+        setVmApps(Array.isArray(list?.apps) ? list.apps : [])
         setHookInfo(hooks)
         setLiveInfo(state)
         setBindingInfo(bindings)
@@ -75,10 +78,11 @@ export default function Settings({
   }, [])
 
   const refreshVm = async () => {
-    const [status, hooks, state, bindings, probe] = await Promise.all([
-      native.vmStatus(), native.vmHooks(), native.vmState(), native.vmBindings(), native.vmProbe()
+    const [status, hooks, state, bindings, probe, list] = await Promise.all([
+      native.vmStatus(), native.vmHooks(), native.vmState(), native.vmBindings(), native.vmProbe(), native.vmList()
     ])
     setVmInfo(status)
+    setVmApps(Array.isArray(list?.apps) ? list.apps : [])
     setHookInfo(hooks)
     setLiveInfo(state)
     setBindingInfo(bindings)
@@ -243,8 +247,14 @@ export default function Settings({
             <button className="btn ghost" disabled={vmBusy} onClick={() => vmAction(() => native.vmDaemon(true), 'Daemon')}>Start daemon</button>
             <button className="btn ghost" disabled={vmBusy} onClick={() => vmAction(() => native.vmInstall(vmPath), 'Install typed path')}>Install typed path</button>
           </div>
+          <label className="field-label">Activity override (optional)</label>
+          <div className="input-row">
+            <input value={vmActivity} placeholder="auto · use MAIN/LAUNCHER" onChange={e => setVmActivity(e.target.value)} />
+          </div>
+          <div className="meta-line">Auto activity: {vmApps[0]?.launchActivity || '—'}</div>
+          <div className="meta-line">Activities: {(vmApps[0]?.activities || []).join(', ') || 'none'}</div>
           <div className="btn-row">
-            <button className="btn primary" disabled={vmBusy} onClick={() => vmAction(() => native.vmLaunch(GAME_PACKAGES.eightBallPool), 'Launch')}>Launch 8BP in VM</button>
+            <button className="btn primary" disabled={vmBusy} onClick={() => vmAction(() => native.vmLaunch(GAME_PACKAGES.eightBallPool, vmActivity.trim()), 'Launch')}>Launch 8BP in VM</button>
             <button className="btn ghost" disabled={vmBusy} onClick={() => vmAction(() => native.vmDaemon(false), 'Daemon')}>Stop daemon</button>
           </div>
           <div className="meta-line">Registered: {vmInfo?.apps ?? 0} · Loaders: {vmInfo?.classLoaders ?? 0} · Processes: {(vmInfo?.processes || []).join(', ') || 'none'}</div>

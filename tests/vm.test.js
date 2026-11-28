@@ -45,6 +45,21 @@ test('VM install and launch really parse APKs and extract native libraries', () 
   assert.ok(libs.includes('setExecutable'))
 })
 
+test('VM never auto-picks a Facebook/helper activity as the game launcher', () => {
+  const core = read(vmDir + 'VMCore.java')
+  const settings = read('src/screens/Settings.jsx')
+  const provider = read(vmDir + 'SystemCallProvider.java')
+
+  assert.ok(core.includes('chooseLaunchActivity('))
+  assert.ok(core.includes('"facebook", "customtab", "custom_tab"'))
+  assert.ok(core.includes('"launcheractivity", "splashactivity"'))
+  assert.ok(!core.includes('entry.launchActivity.isEmpty() && (lower.contains("main")'))
+  assert.ok(provider.includes('listing.put("apps", core.list())'))
+  assert.ok(settings.includes('Activity override (optional)'))
+  assert.ok(settings.includes('native.vmLaunch(GAME_PACKAGES.eightBallPool, vmActivity.trim())'))
+  assert.ok(settings.includes('Auto activity:'))
+})
+
 test('VM stages the APK read-only before classloading', () => {
   const core = read(vmDir + 'VMCore.java')
 
