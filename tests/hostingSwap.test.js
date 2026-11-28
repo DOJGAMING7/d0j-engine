@@ -64,12 +64,15 @@ test('status never claims a confirmed in-window host before proof', () => {
 
 test('prepared game context is installed on the Activity before onCreate', () => {
   const hook = read(vmDir + 'HookInstrumentation.java')
-  assert.match(hook, /VMGameHost\.apply\(game, pkg\)/)
-  assert.match(hook, /if \(!VMGameHost\.apply\(game, pkg\)\)/)
+  assert.match(hook, /callActivityOnCreate[\s\S]*VMGameHost\.apply\(activity, pkg\)/)
+  assert.match(hook, /attachBaseContext\(\) would throw/)
+  const newActivityBody = hook.slice(hook.indexOf('Activity newActivity('), hook.indexOf('void callActivityOnCreate('))
+  assert.ok(!newActivityBody.includes('VMGameHost.apply'), 'swap must not happen in newActivity()')
 
   const host = read(vmDir + 'VMGameHost.java')
+  assert.match(host, /Context gameBase = wrap\(prepared, activity\.getBaseContext\(\)\)/)
   assert.match(host, /public static boolean apply\(Activity activity, String packageName\)/)
-  assert.match(host, /setField\(activity, "mBase", prepared\.context\)/)
+  assert.match(host, /setField\(activity, "mBase", gameBase\)/)
   assert.match(host, /setField\(activity, "mResources", prepared\.resources\)/)
   assert.match(host, /setField\(activity, "mApplication", prepared\.application\)/)
   assert.match(host, /installPackageInfo\(activity, prepared\)/)

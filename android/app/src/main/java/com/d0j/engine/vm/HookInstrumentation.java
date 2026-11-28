@@ -59,13 +59,10 @@ public final class HookInstrumentation extends Instrumentation {
                     VMHosting.markStage(core.context(), "SUBSTITUTE_ATTEMPT:" + target);
                     ClassLoader loader = core.getLoader(pkg);
                     if (loader != null) {
-                        Activity game = null;
                         try {
-                            game = (Activity) super.newActivity(loader, target, intent);
-                            if (!VMGameHost.apply(game, pkg)) {
-                                hostingFailed(core.context(), pkg, "ACTIVITY_SWAP_FAILED");
-                                game = null;
-                            }
+                            // The context swap must wait until after Activity.attach();
+                            // doing it here makes attachBaseContext() throw.
+                            return (Activity) super.newActivity(loader, target, intent);
                         } catch (ClassNotFoundException e) {
                             Log.w(TAG, "Game activity class missing: " + target, e);
                             saveHostingError(core.context(), "newActivity", e);
@@ -74,7 +71,6 @@ public final class HookInstrumentation extends Instrumentation {
                             saveHostingError(core.context(), "newActivity", e);
                             hostingFailed(core.context(), pkg, "newActivity: " + e);
                         }
-                        if (game != null) return game;
                     } else {
                         hostingFailed(core.context(), pkg, "NO_GAME_LOADER: " + pkg);
                     }
@@ -87,6 +83,17 @@ public final class HookInstrumentation extends Instrumentation {
     @Override public void callActivityOnCreate(Activity activity, Bundle icicle) {
         Intent intent = activity == null ? null : activity.getIntent();
         boolean gameHost = intent != null && intent.getBooleanExtra("vmSubstitute", false);
+        // attach() has run by now, so mBase is safe to replace. Never do this
+        // in newActivity(): attachBaseContext() would throw "Base context already set".
+        if (gameHost && activity != null) {
+            String pkg = intent.getStringExtra("vmPackage");
+            VMCore core = VMCore.peek();
+            if (!VMGameHost.apply(activity, pkg)) {
+                hostingFailed(core == null ? null : core.context(), pkg, "ACTIVITY_SWAP_FAILED");
+                try { activity.finish(); } catch (Throwable ignored) { }
+                return;
+            }
+        }
         boolean created = false;
         try {
             super.callActivityOnCreate(activity, icicle);

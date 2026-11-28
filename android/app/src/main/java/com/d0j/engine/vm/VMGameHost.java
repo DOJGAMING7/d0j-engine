@@ -31,14 +31,18 @@ public final class VMGameHost {
         public final Resources resources;
         public final Application application;
         public final Context context;
+        public final ApplicationInfo info;
+        public final ClassLoader loader;
         public final String stages;
 
         private Prepared(String packageName, Resources resources, Application application,
-                         Context context, String stages) {
+                         Context context, ApplicationInfo info, ClassLoader loader, String stages) {
             this.packageName = packageName;
             this.resources = resources;
             this.application = application;
             this.context = context;
+            this.info = info;
+            this.loader = loader;
             this.stages = stages;
         }
     }
@@ -58,7 +62,7 @@ public final class VMGameHost {
             Application application = buildApplication(info, loader, context, stages);
             context.application = application;
             Prepared prepared = new Prepared(packageName, resources, application, context,
-                    stages + "|HOST_PREPARE_OK");
+                    info, loader, stages + "|HOST_PREPARE_OK");
             PREPARED.put(packageName, prepared);
             VMHosting.markStage(host, prepared.stages);
             return prepared;
@@ -84,7 +88,10 @@ public final class VMGameHost {
         }
         try {
             VMHosting.markStage(report, "ACTIVITY_SWAP_START");
-            setField(activity, "mBase", prepared.context);
+            // Keep the Activity's real ContextImpl as the delegation target so
+            // window/system services still work; only game-facing values change.
+            Context gameBase = wrap(prepared, activity.getBaseContext());
+            setField(activity, "mBase", gameBase);
             setField(activity, "mResources", prepared.resources);
             setField(activity, "mApplication", prepared.application);
             try { installPackageInfo(activity, prepared); } catch (Throwable ignored) { }
@@ -95,6 +102,14 @@ public final class VMGameHost {
             VMHosting.markError(report, "ACTIVITY_SWAP_FAIL\n" + stack(e));
             return false;
         }
+    }
+
+    private static Context wrap(Prepared prepared, Context base) {
+        GameContext context = new GameContext(
+                base == null ? prepared.context : base,
+                prepared.packageName, prepared.info, prepared.loader, prepared.resources);
+        context.application = prepared.application;
+        return context;
     }
 
     /** Never rely on a game Activity's getApplicationContext() for our files. */
