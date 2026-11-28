@@ -5,7 +5,7 @@ import android.app.AppOpsManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.ImageFormat;
+import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.Image;
@@ -23,6 +23,7 @@ import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.view.Display;
 
+import com.d0j.engine.vm.ScreenBallDetector;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -620,7 +621,7 @@ public class D0JNativePlugin extends Plugin {
             screenThread = new HandlerThread("d0j-screen-capture");
             screenThread.start();
             screenHandler = new Handler(screenThread.getLooper());
-            screenReader = ImageReader.newInstance(width, height, android.graphics.ImageFormat.RGBA_8888, 2);
+            screenReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
             screenReader.setOnImageAvailableListener(reader -> {
                 Image image = reader.acquireLatestImage();
                 if (image == null) return;

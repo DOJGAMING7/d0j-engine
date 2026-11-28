@@ -135,6 +135,8 @@ test('screen capture stays on-device and feeds live line geometry', () => {
   }
   assert.ok(plugin.includes('handleScreenCapturePermission'))
   assert.ok(plugin.includes('ImageReader.newInstance'))
+  assert.ok(plugin.includes('PixelFormat.RGBA_8888'))
+  assert.ok(plugin.includes('import com.d0j.engine.vm.ScreenBallDetector;'))
   assert.ok(plugin.includes('VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR'))
   assert.ok(plugin.includes('ScreenBallDetector.detect'))
   assert.ok(detector.includes('CUE_NOT_VISIBLE'))
