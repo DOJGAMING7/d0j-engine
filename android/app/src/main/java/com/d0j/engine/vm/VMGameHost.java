@@ -237,6 +237,16 @@ public final class VMGameHost {
             // attach with a full Activity context instead of a wrapper.
             stages.append("|APPLICATION_ATTACH_BLOCKED:").append(describe(e));
         }
+        // A real app launch calls onCreate() on the Application before the
+        // Activity. Games often complete their own resource setup here.
+        try {
+            Method onCreate = Application.class.getDeclaredMethod("onCreate");
+            onCreate.setAccessible(true);
+            onCreate.invoke(application);
+            stages.append("|APPLICATION_ONCREATE_OK");
+        } catch (Throwable e) {
+            stages.append("|APPLICATION_ONCREATE_FAIL:").append(describe(e));
+        }
         return application;
     }
 

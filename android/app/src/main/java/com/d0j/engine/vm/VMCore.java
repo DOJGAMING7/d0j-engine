@@ -218,10 +218,11 @@ public final class VMCore {
         } catch (Exception e) {
             throw new VMException("LIB_EXTRACT_FAILED", String.valueOf(e.getMessage()));
         }
-        ClassLoader loader = new dalvik.system.DexClassLoader(
+        ClassLoader loader = new VMGuestClassLoader(
                 entry.apkClassPath(), outDex.getAbsolutePath(), outLibs.getAbsolutePath(), app.getClassLoader());
         loaders.put(packageName, loader);
-        // Step 2a: build game Resources and Application before any Activity is
+        VMHosting.markStage(app, "CLASSLOADER_GUEST_FIRST");
+        // Build game Resources and Application before any Activity is
         // substituted. Failures are recorded as a stage, never as a live host.
         VMGameHost.prepare(app, packageName, apkPaths, loader);
         return true;
@@ -261,9 +262,10 @@ public final class VMCore {
             throw new VMException("LIB_EXTRACT_FAILED", String.valueOf(e.getMessage()));
         }
 
-        ClassLoader loader = new dalvik.system.DexClassLoader(
+        ClassLoader loader = new VMGuestClassLoader(
                 entry.apkClassPath(), outDex.getAbsolutePath(), outLibs.getAbsolutePath(), app.getClassLoader());
         loaders.put(packageName, loader);
+        VMHosting.markStage(app, "CLASSLOADER_GUEST_FIRST");
 
         VMInstrumentation instrumentation = VMRuntime.get();
         JSONObject result = new JSONObject();

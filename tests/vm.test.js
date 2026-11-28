@@ -70,7 +70,7 @@ test('VM stages the APK read-only before classloading', () => {
   assert.ok(core.includes('new File(apkDir,'))
   assert.ok(core.includes('entry.apkPath = stageApk(file, info.packageName)'))
   assert.ok(core.includes('installedApk.canWrite()'), 'restages legacy writable entries')
-  assert.ok(core.includes('new dalvik.system.DexClassLoader(\n                entry.apkClassPath()'))
+  assert.ok(core.includes('new VMGuestClassLoader(\n                entry.apkClassPath()'))
 })
 
 test('probe exposes real memory maps so no base address is guessed', () => {
