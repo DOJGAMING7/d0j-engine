@@ -37,9 +37,15 @@ public final class VMHosting {
         write(context, ERROR_FILE, "", ERROR_MAX_BYTES);
     }
 
-    /** Last completed hosting preparation stage, visible in Settings. */
+    /** Append each stage so a later marker never hides an earlier failure. */
     public static void markStage(Context context, String stage) {
-        write(context, STAGE_FILE, stage == null ? "UNKNOWN_STAGE" : stage, MAX_BYTES);
+        String value = stage == null ? "UNKNOWN_STAGE" : stage;
+        String previous = stage(context);
+        String text = previous.isEmpty() || "HOSTING_RESET".equals(previous)
+                ? value : previous + "|" + value;
+        // Keep the newest markers if the log grows beyond the cap.
+        if (text.length() > MAX_BYTES) text = text.substring(text.length() - MAX_BYTES);
+        write(context, STAGE_FILE, text, MAX_BYTES);
     }
 
     public static String stage(Context context) {

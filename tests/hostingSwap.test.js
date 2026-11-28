@@ -66,6 +66,25 @@ test('game Resources come from the installed app, not a hand-built table', () =>
   assert.match(host, /new GameContext\(\s*gameContext == null \? host : gameContext/)
 })
 
+test('stage markers are appended and the resource table is verified', () => {
+  const hosting = read(vmDir + 'VMHosting.java')
+  assert.match(hosting, /HOSTING_RESET"\.equals\(previous\)/)
+  assert.match(hosting, /previous \+ "\|" \+ value/)
+
+  const host = read(vmDir + 'VMGameHost.java')
+  assert.match(host, /ID_7F0B0015/)
+  assert.match(host, /getResourceTypeName\(0x7f0b0015\)/)
+})
+
+test('the cached Activity inflater is rebound to the game context', () => {
+  const host = read(vmDir + 'VMGameHost.java')
+  assert.match(host, /getSystemService\(String name\)[\s\S]*LAYOUT_INFLATER_SERVICE/)
+  assert.match(host, /cloneInContext\(this\)/)
+  assert.match(host, /private static void installInflater\(Activity activity, Context gameBase\)/)
+  assert.match(host, /setField\(activity, "mInflater", gameInflater\)/)
+  assert.match(host, /installInflater\(activity, gameBase\)/)
+})
+
 test('a stale host panel is removed when hosting fails', () => {
   const proxy = read(vmDir + 'VMProxyActivity.java')
   assert.match(proxy, /CopyOnWriteArrayList/)

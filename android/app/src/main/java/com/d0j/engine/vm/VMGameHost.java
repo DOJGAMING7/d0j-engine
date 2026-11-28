@@ -7,6 +7,7 @@ import android.content.ContextWrapper;
 import android.content.pm.ApplicationInfo;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
+import android.view.LayoutInflater;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -75,6 +76,13 @@ public final class VMGameHost {
                 resources = buildResources(host, apkPaths, stages);
                 stages.append("|RESOURCES_SOURCE:ASSET_PATH");
             }
+            // Definitive check: the game expects 0x7f0b0015 to be a layout.
+            // If this reports anything else, the table is wrong.
+            try {
+                stages.append("|ID_7F0B0015:").append(resources.getResourceTypeName(0x7f0b0015));
+            } catch (Throwable e) {
+                stages.append("|ID_7F0B0015:MISSING:").append(describe(e));
+            }
 
             GameContext context = new GameContext(
                     gameContext == null ? host : gameContext,
@@ -115,6 +123,10 @@ public final class VMGameHost {
             setField(activity, "mBase", gameBase);
             setField(activity, "mResources", prepared.resources);
             setField(activity, "mApplication", prepared.application);
+            // ContextThemeWrapper caches an inflater built at attach() time
+            // from our app context. Replace it or AppCompat inflates layouts
+            // against the wrong resource table.
+            try { installInflater(activity, gameBase); } catch (Throwable ignored) { }
             try { installPackageInfo(activity, prepared); } catch (Throwable ignored) { }
             VMHosting.markStage(report, "ACTIVITY_CONTEXT_SWAPPED");
             return true;
@@ -138,6 +150,14 @@ public final class VMGameHost {
         VMCore core = VMCore.peek();
         if (core != null && core.context() != null) return core.context();
         return activity == null ? null : activity.getApplicationContext();
+    }
+
+    private static void installInflater(Activity activity, Context gameBase) throws Exception {
+        Object cached = activity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+        LayoutInflater gameInflater = (cached instanceof LayoutInflater)
+                ? ((LayoutInflater) cached).cloneInContext(gameBase)
+                : LayoutInflater.from(gameBase);
+        setField(activity, "mInflater", gameInflater);
     }
 
     private static void installPackageInfo(Activity activity, Prepared prepared) throws Exception {
@@ -248,5 +268,14 @@ public final class VMGameHost {
         @Override public ApplicationInfo getApplicationInfo() { return info; }
         @Override public ClassLoader getClassLoader() { return loader; }
         @Override public Context getApplicationContext() { return application == null ? this : application; }
+
+        /** Bind inflation to this context so IDs resolve against the game table. */
+        @Override public Object getSystemService(String name) {
+            Object service = super.getSystemService(name);
+            if (Context.LAYOUT_INFLATER_SERVICE.equals(name) && service instanceof LayoutInflater) {
+                return ((LayoutInflater) service).cloneInContext(this);
+            }
+            return service;
+        }
     }
 }
