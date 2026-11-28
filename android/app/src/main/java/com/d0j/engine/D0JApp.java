@@ -1,6 +1,7 @@
 package com.d0j.engine;
 
 import android.app.Application;
+import android.content.pm.PackageInfo;
 import android.os.Build;
 
 import java.io.File;
@@ -24,7 +25,8 @@ public final class D0JApp extends Application {
                 }
                 out.println("thread=" + (thread == null ? "?" : thread.getName()));
                 out.println("device=" + Build.MANUFACTURER + " " + Build.MODEL + " SDK" + Build.VERSION.SDK_INT);
-                out.println("version=" + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + ")");
+                PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+                out.println("version=" + info.versionName + " (" + info.versionCode + ")");
                 error.printStackTrace(out);
                 out.flush();
                 String text = sw.toString();
