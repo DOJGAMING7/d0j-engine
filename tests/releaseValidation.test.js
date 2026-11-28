@@ -17,6 +17,31 @@ import {
 
 const root = resolve(import.meta.dirname, '..')
 const read = relative => readFileSync(resolve(root, relative), 'utf8')
+const hasBuildArtifacts = () =>
+  existsSync(resolve(root, 'dist', 'index.html'))
+  && existsSync(resolve(root, 'android', 'app', 'src', 'main', 'assets', 'public', 'index.html'))
+
+function fixtureRoot() {
+  const temp = mkdtempSync(join(tmpdir(), 'd0j-release-'))
+  const bases = [
+    'scripts', 'public/scripts', 'dist/scripts',
+    'android/app/src/main/assets/public/scripts'
+  ]
+  for (const base of [...bases, 'dist', 'android/app/src/main/assets/public']) {
+    mkdirSync(join(temp, base), { recursive: true })
+  }
+  const manifest = JSON.parse(read('scripts/index.json'))
+  writeFileSync(join(temp, 'scripts', 'index.json'), JSON.stringify(manifest))
+  for (const entry of manifest.scripts) {
+    const file = String(entry.file).replace(/^scripts\//, '')
+    const source = readFileSync(resolve(root, 'scripts', file))
+    for (const base of bases) writeFileSync(join(temp, base, file), source)
+  }
+  const html = '<html>fixture</html>'
+  writeFileSync(join(temp, 'dist', 'index.html'), html)
+  writeFileSync(join(temp, 'android', 'app', 'src', 'main', 'assets', 'public', 'index.html'), html)
+  return temp
+}
 
 test('balance scan catches malformed Java structure', () => {
   assert.equal(balancedSource('class A { void f() { } }'), true)
@@ -30,19 +55,26 @@ test('release inputs are consistent across package, scripts and native assets', 
   assert.equal(pkg.ok, true)
   assert.equal(pkg.version, '2.1.1')
 
-  const scripts = validateScripts(root)
-  assert.equal(scripts.ok, true)
-  assert.equal(scripts.items.length, 2)
-  for (const item of scripts.items) {
-    assert.equal(item.copies.length, 4)
-    assert.ok(item.copies.every(copy => copy.hash === item.expected))
-    assert.equal(item.copies[3].base, 'android/app/src/main/assets/public/scripts')
-  }
+  // CI runs tests before build/cap sync, so generated files may be absent.
+  const temp = hasBuildArtifacts() ? null : fixtureRoot()
+  try {
+    const target = temp || root
+    const scripts = validateScripts(target)
+    assert.equal(scripts.ok, true)
+    assert.equal(scripts.items.length, 2)
+    for (const item of scripts.items) {
+      assert.equal(item.copies.length, 4)
+      assert.ok(item.copies.every(copy => copy.hash === item.expected))
+      assert.equal(item.copies[3].base, 'android/app/src/main/assets/public/scripts')
+    }
 
-  const web = validateWebAssets(root)
-  assert.equal(web.ok, true)
-  assert.ok(web.files > 2)
-  assert.deepEqual(web.mismatches, [])
+    const web = validateWebAssets(target)
+    assert.equal(web.ok, true)
+    assert.ok(web.files > 2)
+    assert.deepEqual(web.mismatches, [])
+  } finally {
+    if (temp) rmSync(temp, { recursive: true, force: true })
+  }
 })
 
 test('native structure and bindings are honest', () => {
@@ -81,10 +113,17 @@ test('stale native web assets are detected', () => {
   }
 })
 
-test('full report passes locally but never claims live readiness', () => {
+test('full report passes after build but never claims live readiness', () => {
   const report = runValidation(root)
-  assert.equal(report.ok, true)
-  assert.deepEqual(report.blockers, [])
+  if (hasBuildArtifacts()) {
+    assert.equal(report.ok, true)
+    assert.deepEqual(report.blockers, [])
+  } else {
+    // Clean checkout: the release gate must fail loudly, not fake a pass.
+    assert.equal(report.ok, false)
+    assert.ok(report.blockers.some(blocker => blocker.startsWith('scripts:')))
+    assert.ok(report.blockers.some(blocker => blocker.startsWith('webAssets:')))
+  }
   assert.equal(report.liveReady, false)
   assert.ok(report.limits.length >= 3)
   assert.ok(report.deviceChecklist.length >= 10)
