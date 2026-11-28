@@ -54,7 +54,7 @@ test('balance scan catches malformed Java structure', () => {
 test('release inputs are consistent across package, scripts and native assets', () => {
   const pkg = validatePackage(root)
   assert.equal(pkg.ok, true)
-  assert.equal(pkg.version, '2.2.3')
+  assert.equal(pkg.version, '2.2.4')
 
   // CI runs tests before build/cap sync, so generated files may be absent.
   const temp = hasBuildArtifacts() ? null : fixtureRoot()

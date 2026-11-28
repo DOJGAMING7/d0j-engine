@@ -131,11 +131,7 @@ public final class VMGameHost {
             // against the wrong resource table.
             try { installInflater(activity, gameBase); } catch (Throwable ignored) { }
             try { installPackageInfo(activity, prepared); } catch (Throwable ignored) { }
-            try {
-                installTheme(activity, prepared, report);
-            } catch (Throwable e) {
-                VMHosting.markStage(report, "THEME_FAIL:" + describe(e));
-            }
+            installTheme(activity, prepared, report);
             VMHosting.markStage(report, "ACTIVITY_CONTEXT_SWAPPED");
             return true;
         } catch (Throwable e) {
@@ -160,39 +156,48 @@ public final class VMGameHost {
         return activity == null ? null : activity.getApplicationContext();
     }
 
-    /** Apply the game's manifest theme so AppCompat finds its own theme attrs. */
-    private static void installTheme(Activity activity, Prepared prepared, Context report)
-            throws Exception {
+    /**
+     * Set the game's manifest theme BEFORE Activity.attach(). After attach,
+     * Android 17 hides the Activity's theme field from reflection entirely,
+     * so no post-attach write can succeed. setTheme() before attach only
+     * records the resource id; the Theme is then built lazily from the game's
+     * Resources once our context swap is installed.
+     */
+    public static void applyThemeBeforeAttach(Activity activity, String packageName,
+                                              String target, Context report) {
         int theme = 0;
-        Intent intent = activity.getIntent();
-        String target = intent == null ? null : intent.getStringExtra("vmActivity");
         try {
-            if (target != null && !target.trim().isEmpty()) {
-                ActivityInfo info = prepared.context.getPackageManager().getActivityInfo(
-                        new ComponentName(prepared.packageName, target), 0);
-                if (info != null) theme = info.theme;
+            if (packageName != null) {
+                if (target != null && !target.trim().isEmpty()) {
+                    ActivityInfo info = report.getPackageManager().getActivityInfo(
+                            new ComponentName(packageName, target), 0);
+                    if (info != null) theme = info.theme;
+                }
+                if (theme == 0) {
+                    ApplicationInfo app = report.getPackageManager().getApplicationInfo(
+                            packageName, 0);
+                    if (app != null) theme = app.theme;
+                }
             }
-        } catch (Throwable ignored) { }
-        if (theme == 0) theme = prepared.info.theme;
-        // Diagnostics go to OUR storage, never the game's private files.
+        } catch (Throwable e) {
+            VMHosting.markStage(report, "THEME_LOOKUP_FAIL:" + describe(e));
+        }
         VMHosting.markStage(report, "THEME_ID:" + theme);
-        if (theme == 0) {
+        if (activity == null || theme == 0) {
             VMHosting.markStage(report, "THEME_MISSING");
             return;
         }
-        // Do not call Activity.setTheme(): it copies the base ContextImpl's
-        // theme, which still belongs to OUR resource table. Build a fresh theme
-        // from the game's Resources and install it directly on the Activity.
-        Resources.Theme gameTheme = prepared.resources.newTheme();
-        gameTheme.applyStyle(theme, true);
-        // Newer Android (including Android 17 / SDK 37) hides ContextThemeWrapper.mTheme from getDeclaredField(name),
-        // so locate the Theme field by type instead.
-        setThemeField(activity, gameTheme, report);
-        try { setField(activity, "mThemeResource", theme); } catch (Throwable ignored) { }
-        if (prepared.context instanceof GameContext) {
-            ((GameContext) prepared.context).theme = gameTheme;
+        try {
+            activity.setTheme(theme);
+            VMHosting.markStage(report, "THEME_PREATTACH_SET:" + theme);
+        } catch (Throwable e) {
+            VMHosting.markStage(report, "THEME_PREATTACH_FAIL:" + describe(e));
         }
-        VMHosting.markStage(report, "THEME_APPLIED:" + theme);
+    }
+
+    /** Theme work is completed before attach(); nothing is left to do here. */
+    private static void installTheme(Activity activity, Prepared prepared, Context report) {
+        VMHosting.markStage(report, "THEME_PREATTACH_ONLY");
     }
 
     private static void installInflater(Activity activity, Context gameBase) throws Exception {
@@ -216,26 +221,6 @@ public final class VMGameHost {
         getInfo.setAccessible(true);
         Object loaded = getInfo.invoke(thread, prepared.context.getApplicationInfo(), defaultCompat.get(null));
         setField(activity, "mPackageInfo", loaded);
-    }
-
-    /** Locate the hidden Theme field by type; newer Android hides it by name. */
-    private static void setThemeField(Object target, Resources.Theme value, Context report)
-            throws Exception {
-        Class<?> type = target.getClass();
-        while (type != null) {
-            for (Field field : type.getDeclaredFields()) {
-                if (Resources.Theme.class.equals(field.getType())) {
-                    try {
-                        field.setAccessible(true);
-                        field.set(target, value);
-                        VMHosting.markStage(report, "THEME_FIELD:" + field.getName());
-                        return;
-                    } catch (Throwable ignored) { }
-                }
-            }
-            type = type.getSuperclass();
-        }
-        throw new NoSuchFieldException("Resources.Theme field");
     }
 
     private static void setField(Object target, String name, Object value) throws Exception {

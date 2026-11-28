@@ -61,8 +61,12 @@ public final class HookInstrumentation extends Instrumentation {
                     if (loader != null) {
                         try {
                             // The context swap must wait until after Activity.attach();
-                            // doing it here makes attachBaseContext() throw.
-                            return (Activity) super.newActivity(loader, target, intent);
+                            // doing it here makes attachBaseContext() throw. The theme,
+                            // however, must be set BEFORE attach() on Android 17+.
+                            Activity created = (Activity) super.newActivity(loader, target, intent);
+                            VMGameHost.applyThemeBeforeAttach(
+                                    created, pkg, target, core.context());
+                            return created;
                         } catch (ClassNotFoundException e) {
                             Log.w(TAG, "Game activity class missing: " + target, e);
                             saveHostingError(core.context(), "newActivity", e);

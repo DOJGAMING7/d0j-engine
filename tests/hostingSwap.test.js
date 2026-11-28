@@ -106,7 +106,7 @@ test('prepared game context is installed on the Activity before onCreate', () =>
   assert.match(hook, /callActivityOnCreate[\s\S]*VMGameHost\.apply\(activity, pkg\)/)
   assert.match(hook, /attachBaseContext\(\) would throw/)
   const newActivityBody = hook.slice(hook.indexOf('Activity newActivity('), hook.indexOf('void callActivityOnCreate('))
-  assert.ok(!newActivityBody.includes('VMGameHost.apply'), 'swap must not happen in newActivity()')
+  assert.ok(!newActivityBody.includes('VMGameHost.apply('), 'context swap must not happen in newActivity()')
 
   const host = read(vmDir + 'VMGameHost.java')
   assert.match(host, /Context gameBase = wrap\(prepared, activity\.getBaseContext\(\)\)/)

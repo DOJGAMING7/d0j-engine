@@ -29,27 +29,21 @@ test('both prepare and launch use the guest-first loader', () => {
   assert.ok(core.includes('CLASSLOADER_GUEST_FIRST'))
 })
 
-test("the game's manifest theme is applied from its own resources", () => {
+test("the game's manifest theme is applied before Activity.attach", () => {
   const host = read(vmDir + 'VMGameHost.java')
-  assert.match(host, /private static void installTheme\(Activity activity, Prepared prepared, Context report\)/)
-  assert.match(host, /getActivityInfo\(\s*new ComponentName\(prepared\.packageName, target\)/)
-  assert.match(host, /prepared\.info\.theme/)
-  // A theme must be built from the game's Resources, not copied from our app.
-  assert.match(host, /prepared\.resources\.newTheme\(\)/)
-  assert.match(host, /gameTheme\.applyStyle\(theme, true\)/)
-  assert.match(host, /setThemeField\(activity, gameTheme, report\)/)
-  assert.match(host, /private static void setThemeField\(Object target, Resources\.Theme value, Context report\)/)
-  assert.match(host, /Resources\.Theme\.class\.equals\(field\.getType\(\)\)/)
-  assert.match(host, /setField\(activity, "mThemeResource", theme\)/)
-  assert.ok(!host.includes('activity.setTheme(theme)'), 'no setTheme copy from our resources')
-  // Diagnostics must be visible in our storage, with failures surfaced.
-  assert.match(host, /VMHosting\.markStage\(report, "THEME_ID:" \+ theme\)/)
-  assert.match(host, /VMHosting\.markStage\(report, "THEME_APPLIED:" \+ theme\)/)
-  assert.match(host, /VMHosting\.markStage\(report, "THEME_FAIL:" \+ describe\(e\)\)/)
-  assert.match(host, /installTheme\(activity, prepared, report\)/)
-  // The delegate reads the base context's theme too.
-  assert.match(host, /private Resources\.Theme theme;/)
-  assert.match(host, /@Override public Resources\.Theme getTheme\(\)/)
+  assert.match(host, /public static void applyThemeBeforeAttach\(Activity activity, String packageName,/)
+  assert.match(host, /getActivityInfo\(\s*new ComponentName\(packageName, target\)/)
+  assert.match(host, /getApplicationInfo\(\s*packageName, 0\)/)
+  assert.match(host, /activity\.setTheme\(theme\)/)
+  assert.match(host, /THEME_ID:/)
+  assert.match(host, /THEME_PREATTACH_SET:/)
+  assert.match(host, /THEME_PREATTACH_FAIL:/)
+  assert.match(host, /THEME_PREATTACH_ONLY/)
+  assert.ok(!host.includes('setThemeField('), 'no post-attach theme field reflection')
+  assert.ok(!host.includes('THEME_FAIL:'), 'no stale post-attach theme failure marker')
+
+  const hook = read(vmDir + 'HookInstrumentation.java')
+  assert.match(hook, /VMGameHost\.applyThemeBeforeAttach\(/)
 })
 
 test('the game Application.onCreate is invoked before the Activity', () => {
