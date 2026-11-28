@@ -22,7 +22,7 @@ test('quick test separates local core checks from informational device gates', (
 test('launch quick test runs after permissions and an active session are established', () => {
   const app = read('src/App.jsx')
   const start = app.indexOf('const startSession =')
-  const block = app.slice(start, start + 2200)
+  const block = app.slice(start, start + 4000)
   const permAt = block.indexOf('requestOverlayPermission')
   const testAt = block.indexOf("runQuickTest('launch')")
   assert.ok(permAt > -1, 'session flow still asks for overlay permission')

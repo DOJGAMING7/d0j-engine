@@ -149,10 +149,13 @@ test('screen capture stays on-device and feeds live line geometry', () => {
   assert.ok(app.includes("step = 'Screen capture bridge'"))
   assert.ok(app.includes("step = 'Ball detection'"))
   assert.ok(app.includes('const capture = await native.startScreenCapture()'))
+  assert.ok(app.includes('native.startSession({ packageName: pkg, launchGame: false })'))
+  assert.ok(app.includes('await native.launchGame(pkg)'))
   assert.ok(app.includes('LIVE OVERLAY: screen capture not active · start a session and allow capture'))
   assert.ok(app.includes('native.stopScreenCapture()'))
-  assert.ok(manifest.includes('specialUse|mediaProjection'))
-  assert.ok(overlay.includes('FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION'))
+  assert.ok(manifest.includes('android:foregroundServiceType="specialUse"'))
+  assert.ok(!manifest.includes('mediaProjection'), 'overlay FGS must not claim mediaProjection')
+  assert.ok(!overlay.includes('FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION'))
 })
 
 test('crash diagnostics are saved locally and exposed in settings', () => {
@@ -164,7 +167,7 @@ test('crash diagnostics are saved locally and exposed in settings', () => {
   const settings = read('src/screens/Settings.jsx')
 
   assert.ok(manifest.includes('android:name=".D0JApp"'))
-  assert.ok(manifest.includes('FOREGROUND_SERVICE_MEDIA_PROJECTION'))
+  assert.ok(!manifest.includes('FOREGROUND_SERVICE_MEDIA_PROJECTION'), 'no system projection permission needed')
   assert.ok(appClass.includes('Thread.setDefaultUncaughtExceptionHandler'))
   assert.ok(appClass.includes('D0JPrefs.LAST_CRASH'))
   assert.ok(prefs.includes('LAST_CRASH'))

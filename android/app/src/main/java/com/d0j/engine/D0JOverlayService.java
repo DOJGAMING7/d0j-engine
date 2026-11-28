@@ -275,9 +275,7 @@ public class D0JOverlayService extends Service {
                 .addAction(new Notification.Action.Builder(null, "Stop", pi(ACTION_STOP_SESSION, 2)).build());
         Notification n = b.build();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, n,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                            | ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
+            startForeground(NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
         } else {
             startForeground(NOTIFICATION_ID, n);
         }

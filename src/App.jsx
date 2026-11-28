@@ -523,31 +523,38 @@ function Main() {
       say('Enable Display over other apps for session overlay, then tap Launch again', 'error')
       return { ok: false, error: 'OVERLAY_PERMISSION_REQUIRED' }
     }
-    // Ask for screen capture while the app is in the foreground. Requesting it
-    // from the floating menu after the game is open is unsafe on some ROMs.
-    if (native.isNative()) {
-      const capture = await native.startScreenCapture()
-        .catch(e => ({ ok: false, reason: String(e?.message || e) }))
-      screenCaptureRef.current = capture?.ok === true
-      setScreenCapture(screenCaptureRef.current)
-      if (!screenCaptureRef.current) {
-        say(`Screen capture off (${capture?.reason || 'denied'}) · live lines unavailable`, 'error')
-      }
-    }
-    const res = await native.startSession({ packageName: pkg, launchGame: true })
-    if (res?.ok) {
+    // Start the overlay service first, before any MediaProjection token exists.
+    // The overlay only uses the special-use FGS type: declaring mediaProjection
+    // on it requires a system capture token we do not have and crashes Android 14.
+    const session = await native.startSession({ packageName: pkg, launchGame: false })
+      .catch(e => ({ ok: false, error: String(e?.message || e) }))
+    if (session?.ok) {
       setConfigState(prev => ({ ...prev, sessionActive: true }))
-      say(`Session active · ${game?.name || pkg}`, 'running')
+      // Ask for capture while the app is still in the foreground.
+      if (native.isNative()) {
+        const capture = await native.startScreenCapture()
+          .catch(e => ({ ok: false, reason: String(e?.message || e) }))
+        screenCaptureRef.current = capture?.ok === true
+        setScreenCapture(screenCaptureRef.current)
+        if (!screenCaptureRef.current) {
+          say(`Screen capture off (${capture?.reason || 'denied'}) · live lines unavailable`, 'error')
+        }
+      }
+      const launch = await native.launchGame(pkg)
+      say(launch?.ok
+        ? `Session active · ${game?.name || pkg}`
+        : `Session active · game launch failed (${launch?.error || 'unknown'})`,
+      launch?.ok ? 'running' : 'error')
       await refreshNativeStatus()
       if (config.runTestOnLaunch) runQuickTest('launch').catch(() => {})
-      return res
+      return { ...session, launched: launch?.ok === true }
     }
     // Fallback: launch without overlay session
     const launch = await native.launchGame(pkg)
     if (launch?.ok) say(`Opened ${game?.name || pkg} (no overlay session)`, 'ready')
-    else say(`Launch failed: ${res?.error || launch?.error || 'unknown'}`, 'error')
+    else say(`Launch failed: ${session?.error || launch?.error || 'unknown'}`, 'error')
     await refreshNativeStatus()
-    return res?.ok ? res : launch
+    return launch
   }
 
   const requestOverlay = async () => {
