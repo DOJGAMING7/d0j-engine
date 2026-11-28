@@ -121,6 +121,42 @@ test('one-tap APK update downloads from GitHub and relaunches after install', ()
   assert.ok(home.includes('onStartSession(GAME_PACKAGES.eightBallPool)'))
 })
 
+test('screen capture stays on-device and feeds live line geometry', () => {
+  const nativeJs = read('src/lib/native.js')
+  const plugin = read('android/app/src/main/java/com/d0j/engine/D0JNativePlugin.java')
+  const detector = read(vmDir + 'ScreenBallDetector.java')
+  const app = read('src/App.jsx')
+  const manifest = read('android/app/src/main/AndroidManifest.xml')
+  const overlay = read('android/app/src/main/java/com/d0j/engine/D0JOverlayService.java')
+
+  for (const method of ['startScreenCapture', 'readScreenState', 'stopScreenCapture']) {
+    assert.ok(nativeJs.includes(`${method}:`), `missing native.${method}`)
+    assert.ok(plugin.includes(`public void ${method}(PluginCall call)`), `missing plugin method ${method}`)
+  }
+  assert.ok(plugin.includes('handleScreenCapturePermission'))
+  assert.ok(plugin.includes('ImageReader.newInstance'))
+  assert.ok(plugin.includes('VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR'))
+  assert.ok(plugin.includes('ScreenBallDetector.detect'))
+  assert.ok(detector.includes('CUE_NOT_VISIBLE'))
+  assert.ok(detector.includes('"source", "screen"'))
+  assert.ok(detector.includes('"simulated", false'))
+  assert.ok(detector.includes('nearPocket('))
+  assert.ok(detector.includes('categoryOf('))
+  assert.ok(app.includes('? await readScreenSnapshot()'))
+  assert.ok(app.includes('screenCaptureRef.current'))
+  assert.ok(app.includes("step = 'Screen capture bridge'"))
+  assert.ok(app.includes("step = 'Ball detection'"))
+  assert.ok(app.includes('native.stopScreenCapture()'))
+  assert.ok(manifest.includes('specialUse|mediaProjection'))
+  assert.ok(overlay.includes('FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION'))
+})
+
+test('quick test reports the exact failed core step', () => {
+  const app = read('src/App.jsx')
+  assert.ok(app.includes('Quick test FAIL · core ${coreText} · ${firstFailed?.name || \'error\'}: ${String(firstFailed?.detail || \'\').slice(0, 80)}'))
+  assert.ok(app.includes('Quick test PASS · core ${coreText}'))
+})
+
 test('native bridge and Capacitor plugin expose VM calls', () => {
   const nativeJs = read('src/lib/native.js')
   const plugin = read('android/app/src/main/java/com/d0j/engine/D0JNativePlugin.java')

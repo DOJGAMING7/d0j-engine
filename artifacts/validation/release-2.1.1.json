@@ -1,7 +1,7 @@
 {
   "ok": true,
   "liveReady": false,
-  "generatedAt": "2026-11-28T09:19:14.107Z",
+  "generatedAt": "2026-11-28T09:34:45.524Z",
   "version": "2.1.1",
   "checks": [
     {
@@ -85,8 +85,8 @@
     {
       "name": "java",
       "ok": true,
-      "detail": "45 Java sources balanced, no accessibility declarations",
-      "files": 45,
+      "detail": "46 Java sources balanced, no accessibility declarations",
+      "files": 46,
       "missing": [],
       "unbalanced": [],
       "accessibility": false,

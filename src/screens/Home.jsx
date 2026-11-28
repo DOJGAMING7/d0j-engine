@@ -40,6 +40,7 @@ export default function Home({
   runningLineScript,
   liveOverlay,
   liveOverlayInfo,
+  screenCapture,
   onStartLiveOverlay,
   onStopLiveOverlay,
   autoLive,
@@ -171,6 +172,7 @@ export default function Home({
           onRunQuickTest={onRunQuickTest}
           liveOverlay={liveOverlay}
           liveOverlayInfo={liveOverlayInfo}
+          screenCapture={screenCapture}
           onStartLiveOverlay={onStartLiveOverlay}
           onStopLiveOverlay={onStopLiveOverlay}
           autoLive={autoLive}

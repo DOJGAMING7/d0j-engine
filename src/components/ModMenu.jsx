@@ -96,7 +96,7 @@ export default function ModMenu({
   config, setConfig, state, nativeStatus, sessionStatus, testReport,
   runningScript, runningLineScript,
   onClose, onPlay, onStartSession, onRunScript, onStop, onOpenTable, onRunLineScript, onRunQuickTest,
-  liveOverlay, onStartLiveOverlay, onStopLiveOverlay, liveOverlayInfo,
+  liveOverlay, onStartLiveOverlay, onStopLiveOverlay, liveOverlayInfo, screenCapture,
   autoLive, autoLiveInfo, onStartLiveAuto, onStopLiveAuto, inputInfo,
   onRequestNotifications, onRequestUsageAccess
 }) {
@@ -231,7 +231,7 @@ export default function ModMenu({
           <button className="mm-action" onClick={onOpenTable}><b>OPEN DEMO</b><span>Table test</span></button>
           <button className="mm-action" onClick={liveOverlay ? onStopLiveOverlay : onStartLiveOverlay}><b>{liveOverlay ? 'STOP LIVE LINES' : 'START LIVE LINES'}</b><span>Overlay over game</span></button>
         </div>
-        <div className="mm-note">Live overlay: {liveOverlay ? (liveOverlayInfo?.ok ? `${liveOverlayInfo.balls} balls · ${liveOverlayInfo.source}${liveOverlayInfo.simulated ? ' (simulated)' : ''}` : (liveOverlayInfo?.reason || 'waiting for measured state')) : 'off'}. Demo table prediction is local/simulated.</div>
+        <div className="mm-note">Live overlay: {liveOverlay ? (liveOverlayInfo?.ok ? `${liveOverlayInfo.balls} balls · ${liveOverlayInfo.source}${liveOverlayInfo.simulated ? ' (simulated)' : ''}` : (liveOverlayInfo?.reason || 'waiting for measured state')) : 'off'} · screen reading {screenCapture ? 'on' : 'off'}. Demo table prediction is local/simulated.</div>
       </>
     )
 
@@ -285,7 +285,7 @@ export default function ModMenu({
         <StatusRow label="A1 policy" value="No accessibility / no auto-back" />
       </>
     )
-  }, [tab, c, state, statusText, nativeStatus, findingShot, runningScript, runningLineScript, testReport, onPlay, onRunScript, onStop, onOpenTable, onRunLineScript, onStartSession, onRunQuickTest, onRequestNotifications, onRequestUsageAccess, liveOverlay, liveOverlayInfo, autoLive, autoLiveInfo, inputInfo])
+  }, [tab, c, state, statusText, nativeStatus, findingShot, runningScript, runningLineScript, testReport, onPlay, onRunScript, onStop, onOpenTable, onRunLineScript, onStartSession, onRunQuickTest, onRequestNotifications, onRequestUsageAccess, liveOverlay, liveOverlayInfo, screenCapture, autoLive, autoLiveInfo, inputInfo])
 
   return (
     <div className="mm-backdrop mm-floating">

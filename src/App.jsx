@@ -31,6 +31,7 @@ function Main() {
   const [runningLineScript, setRunningLineScript] = useState(false)
   const [liveOverlay, setLiveOverlay] = useState(false)
   const [liveOverlayInfo, setLiveOverlayInfo] = useState(null)
+  const [screenCapture, setScreenCapture] = useState(false)
   const [calibration, setCalibration] = useState(() => ({ ...DEFAULT_CALIBRATION, ...(getPref('liveCalibration', {}) || {}) }))
   const [inputTaps, setInputTaps] = useState(() => getPref('inputTaps', { queue: null, tables: {} }) || { queue: null, tables: {} })
   const [inputProcess, setInputProcess] = useState('0')
@@ -52,6 +53,7 @@ function Main() {
   const liveLastRef = useRef('')
   const liveConfigRef = useRef(config)
   const liveCalibrationRef = useRef(calibration)
+  const screenCaptureRef = useRef(false)
   const autoActiveRef = useRef(false)
   const autoTimerRef = useRef(null)
   const autoLastShotRef = useRef(0)
@@ -139,6 +141,27 @@ function Main() {
       } catch (e) { add('Prediction script', false, e?.message || e) }
       step = 'Config'
       add('Config', !!config && typeof config.power === 'number', `power ${config?.power}`)
+      step = 'Screen capture bridge'
+      try {
+        const screenProbe = await native.readScreenState({})
+        add('Screen capture bridge', screenProbe?.source === 'screen' || !native.isNative(),
+          native.isNative() ? (screenProbe?.reason || 'ready') : 'web mode')
+      } catch (e) { add('Screen capture bridge', false, e?.message || e) }
+      step = 'Ball detection'
+      try {
+        const sample = {
+          source: 'screen', simulated: false, width: 600, height: 900,
+          ballRadius: 11, pocketRadius: 18, cueX: 300, cueY: 660,
+          balls: [{ id: '1', x: 300, y: 300 }, { id: '2', x: 180, y: 420 }],
+          pockets: [
+            { id: 'TL', x: 0, y: 0 }, { id: 'TM', x: 300, y: 0 }, { id: 'TR', x: 600, y: 0 },
+            { id: 'BL', x: 0, y: 900 }, { id: 'BM', x: 300, y: 900 }, { id: 'BR', x: 600, y: 900 }
+          ]
+        }
+        const built = buildLiveOverlay(sample, { calibration: DEFAULT_CALIBRATION })
+        add('Ball detection', built.ok && built.lines.length > 0 && built.source === 'screen' && !built.simulated,
+          built.ok ? `${built.balls} balls · ${built.source}` : built.reason)
+      } catch (e) { add('Ball detection', false, e?.message || e) }
       step = 'VM hooks'
       try {
         const hooks = await native.vmHooks()
@@ -274,8 +297,20 @@ function Main() {
     }
   }
 
+  const readScreenSnapshot = async () => {
+    const res = await native.readScreenState(liveCalibrationRef.current).catch(() => ({ ok: false, reason: 'SCREEN_STATE_CALL_FAILED' }))
+    if (!res?.ok) return { ok: false, reason: res?.reason || 'SCREEN_STATE_FAILED', source: 'screen', simulated: false }
+    try {
+      return JSON.parse(res.json)
+    } catch {
+      return { ok: false, reason: 'SCREEN_STATE_PARSE_FAILED', source: 'screen', simulated: false }
+    }
+  }
+
   const pushLiveOverlay = async () => {
-    const res = await native.vmState().catch(() => ({ ok: false, reason: 'STATE_CALL_FAILED' }))
+    const res = screenCaptureRef.current
+      ? await readScreenSnapshot()
+      : await native.vmState().catch(() => ({ ok: false, reason: 'STATE_CALL_FAILED' }))
     if (!res?.ok) {
       setLiveOverlayInfo({ ok: false, reason: res?.reason || res?.code || 'STATE_UNAVAILABLE', lines: [] })
       await native.clearOverlayLines().catch(() => {})
@@ -312,7 +347,13 @@ function Main() {
     liveActiveRef.current = true
     liveLastRef.current = ''
     setLiveOverlay(true)
-    say('LIVE OVERLAY: starting · needs measured state', 'running')
+    const capture = await native.startScreenCapture().catch(() => ({ ok: false, reason: 'SCREEN_PERMISSION_FAILED' }))
+    screenCaptureRef.current = capture?.ok === true
+    setScreenCapture(screenCaptureRef.current)
+    say(screenCaptureRef.current
+      ? 'LIVE OVERLAY: reading screen · allow capture if prompted'
+      : `LIVE OVERLAY: screen capture off (${capture?.reason || 'denied'}) · simulated state only`,
+    screenCaptureRef.current ? 'running' : 'error')
     await liveTick()
   }
 
@@ -322,6 +363,11 @@ function Main() {
     if (liveTimerRef.current) {
       clearTimeout(liveTimerRef.current)
       liveTimerRef.current = null
+    }
+    if (screenCaptureRef.current) {
+      await native.stopScreenCapture().catch(() => {})
+      screenCaptureRef.current = false
+      setScreenCapture(false)
     }
     await native.clearOverlayLines().catch(() => {})
     say('LIVE OVERLAY: stopped', 'stopped')
@@ -371,7 +417,9 @@ function Main() {
     const liveConfig = autoConfigRef.current
     try {
       if (liveConfig.autoQueue) await runQueueSteps()
-      const res = await native.vmState().catch(() => ({ ok: false, reason: 'STATE_CALL_FAILED' }))
+      const res = screenCaptureRef.current
+        ? await readScreenSnapshot()
+        : await native.vmState().catch(() => ({ ok: false, reason: 'STATE_CALL_FAILED' }))
       if (!res?.ok) {
         setAutoLiveInfo({ ok: false, reason: res?.reason || 'STATE_UNAVAILABLE', stats: { ...stats } })
       } else {
@@ -387,7 +435,9 @@ function Main() {
           const chosen = chooseShot(built, liveConfig, res)
           const turnKey = String(res.turn || res.phase || '')
           const turn = turnKey.toLowerCase()
-          const yourTurn = turn.includes('you') || turn.includes('your') || turn.includes('your_turn')
+          const hasTurn = turnKey.length > 0
+          const yourTurn = hasTurn && (turn.includes('you') || turn.includes('your') || turn.includes('your_turn'))
+          const turnReason = hasTurn ? '' : (screenCaptureRef.current ? 'turn not detected from screen' : 'turn unknown')
           const motion = humanMotionRef.current
           if (yourTurn && turnKeyRef.current !== turnKey) {
             turnKeyRef.current = turnKey
@@ -416,7 +466,7 @@ function Main() {
           }
           setAutoLiveInfo({
             ok: true,
-            reason: chosen.ok ? (yourTurn ? (thinking ? 'thinking' : (cooldown ? 'shot planned' : 'cooldown')) : 'opponent turn') : chosen.reason,
+            reason: chosen.ok ? (hasTurn ? (yourTurn ? (thinking ? 'thinking' : (cooldown ? 'shot planned' : 'cooldown')) : 'opponent turn') : turnReason) : chosen.reason,
             target: chosen.shot?.id || null,
             source: built.source,
             simulated: built.simulated,
@@ -443,7 +493,7 @@ function Main() {
     turnKeyRef.current = ''
     reactionRef.current = 0
     setAutoLive(true)
-    say('LIVE AUTO: starting · needs measured state + bound activity', 'running')
+    say('LIVE AUTO: starting · needs measured turn + bound activity', 'running')
     await autoTick()
   }
 
@@ -512,6 +562,17 @@ function Main() {
   }
 
   const stopSession = async () => {
+    liveActiveRef.current = false
+    if (liveTimerRef.current) {
+      clearTimeout(liveTimerRef.current)
+      liveTimerRef.current = null
+    }
+    if (screenCaptureRef.current) {
+      await native.stopScreenCapture().catch(() => {})
+      screenCaptureRef.current = false
+      setScreenCapture(false)
+    }
+    await native.clearOverlayLines().catch(() => {})
     await native.stopSession().catch(() => {})
     setConfigState(prev => ({ ...prev, sessionActive: false, autoPlay: false }))
     bridge.stopSimulation()
@@ -735,6 +796,7 @@ function Main() {
           onRunQuickTest={runQuickTest}
           liveOverlay={liveOverlay}
           liveOverlayInfo={liveOverlayInfo}
+          screenCapture={screenCapture}
           onStartLiveOverlay={startLiveOverlay}
           onStopLiveOverlay={stopLiveOverlay}
           autoLive={autoLive}
@@ -768,6 +830,7 @@ function Main() {
       runningLineScript={runningLineScript}
       liveOverlay={liveOverlay}
       liveOverlayInfo={liveOverlayInfo}
+      screenCapture={screenCapture}
       onStartLiveOverlay={startLiveOverlay}
       onStopLiveOverlay={stopLiveOverlay}
       autoLive={autoLive}
@@ -802,6 +865,7 @@ function Main() {
       onRunLiveLines={runLiveLines}
       liveOverlay={liveOverlay}
       liveOverlayInfo={liveOverlayInfo}
+      screenCapture={screenCapture}
       onStartLiveOverlay={startLiveOverlay}
       onStopLiveOverlay={stopLiveOverlay}
       calibration={calibration}

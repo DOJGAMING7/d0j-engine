@@ -5,11 +5,23 @@ import android.app.AppOpsManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.ImageFormat;
+import android.hardware.display.DisplayManager;
+import android.hardware.display.VirtualDisplay;
+import android.media.Image;
+import android.media.ImageReader;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Looper;
 import android.os.Process;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
+import android.view.Display;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -41,6 +53,17 @@ import java.util.Iterator;
 )
 public class D0JNativePlugin extends Plugin {
     private static volatile D0JNativePlugin instance;
+
+    // Session-scoped screen reading. Frames stay in process and are never uploaded.
+    private static MediaProjection screenProjection;
+    private static VirtualDisplay screenDisplay;
+    private static ImageReader screenReader;
+    private static HandlerThread screenThread;
+    private static Handler screenHandler;
+    private static volatile int[] screenPixels;
+    private static volatile int screenFrameWidth;
+    private static volatile int screenFrameHeight;
+    private static volatile String screenReason = "NOT_STARTED";
 
     @Override
     public void load() {
@@ -550,6 +573,165 @@ public class D0JNativePlugin extends Plugin {
         } catch (Exception e) {
             call.reject("COPY_FAILED", String.valueOf(e.getMessage()));
         }
+    }
+
+    @PluginMethod
+    public void startScreenCapture(PluginCall call) {
+        if (screenProjection != null && screenReader != null && screenPixels != null) {
+            JSObject res = new JSObject();
+            res.put("ok", true);
+            res.put("already", true);
+            res.put("width", screenFrameWidth);
+            res.put("height", screenFrameHeight);
+            call.resolve(res);
+            return;
+        }
+        MediaProjectionManager manager =
+                (MediaProjectionManager) getContext().getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+        if (manager == null) {
+            call.reject("SCREEN_CAPTURE_UNAVAILABLE");
+            return;
+        }
+        try {
+            startActivityForResult(call, manager.createScreenCaptureIntent(), "handleScreenCapturePermission");
+        } catch (Exception e) {
+            call.reject("SCREEN_PERMISSION_FAILED", String.valueOf(e.getMessage()));
+        }
+    }
+
+    @ActivityCallback
+    private void handleScreenCapturePermission(PluginCall call, androidx.activity.result.ActivityResult result) {
+        if (call == null) return;
+        if (result.getResultCode() != android.app.Activity.RESULT_OK || result.getData() == null) {
+            screenReason = "PERMISSION_DENIED";
+            call.reject("SCREEN_PERMISSION_DENIED");
+            return;
+        }
+        MediaProjectionManager manager =
+                (MediaProjectionManager) getContext().getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+        screenProjection = manager.getMediaProjection(result.getResultCode(), result.getData());
+        try {
+            Display display = getBridge().getActivity().getWindowManager().getDefaultDisplay();
+            DisplayMetrics metrics = new DisplayMetrics();
+            display.getRealMetrics(metrics);
+            final int width = metrics.widthPixels;
+            final int height = metrics.heightPixels;
+            final int density = metrics.densityDpi;
+            screenThread = new HandlerThread("d0j-screen-capture");
+            screenThread.start();
+            screenHandler = new Handler(screenThread.getLooper());
+            screenReader = ImageReader.newInstance(width, height, android.graphics.ImageFormat.RGBA_8888, 2);
+            screenReader.setOnImageAvailableListener(reader -> {
+                Image image = reader.acquireLatestImage();
+                if (image == null) return;
+                try {
+                    Image.Plane plane = image.getPlanes()[0];
+                    java.nio.ByteBuffer buffer = plane.getBuffer();
+                    int pixelStride = plane.getPixelStride();
+                    int rowStride = plane.getRowStride();
+                    int[] pixels = new int[width * height];
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++) {
+                            int offset = y * rowStride + x * pixelStride;
+                            buffer.position(offset);
+                            int r = buffer.get() & 0xFF;
+                            int g = buffer.get() & 0xFF;
+                            int b = buffer.get() & 0xFF;
+                            pixels[y * width + x] = 0xFF000000 | (r << 16) | (g << 8) | b;
+                        }
+                    }
+                    screenFrameWidth = width;
+                    screenFrameHeight = height;
+                    screenPixels = pixels;
+                    screenReason = "FRAME_READY";
+                } catch (Throwable ignored) {
+                    screenReason = "FRAME_FAILED";
+                } finally {
+                    image.close();
+                }
+            }, screenHandler);
+            screenDisplay = screenProjection.createVirtualDisplay("d0j-screen", width, height, density,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    screenReader.getSurface(), null, screenHandler);
+            screenReason = "READY";
+            JSObject res = new JSObject();
+            res.put("ok", true);
+            res.put("width", width);
+            res.put("height", height);
+            res.put("source", "screen");
+            call.resolve(res);
+        } catch (Exception e) {
+            screenReason = "START_FAILED: " + String.valueOf(e.getMessage());
+            call.reject("SCREEN_CAPTURE_FAILED", screenReason);
+        }
+    }
+
+    @PluginMethod
+    public void readScreenState(PluginCall call) {
+        int[] snapshot = screenPixels;
+        int width = screenFrameWidth;
+        int height = screenFrameHeight;
+        if (snapshot == null || width < 1 || height < 1) {
+            JSObject res = new JSObject();
+            res.put("ok", false);
+            res.put("reason", "NO_FRAME: " + screenReason);
+            res.put("source", "screen");
+            call.resolve(res);
+            return;
+        }
+        final int[] pixels = snapshot;
+        final int w = width;
+        final int h = height;
+        final JSONObject rect;
+        try {
+            com.getcapacitor.JSObject obj = call.getObject("rect");
+            rect = new JSONObject(obj == null ? "{}" : obj.toString());
+        } catch (Exception e) {
+            call.reject("INVALID_TABLE_RECT");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                JSONObject state = ScreenBallDetector.detect(pixels, w, h, rect);
+                getBridge().getActivity().runOnUiThread(() -> {
+                    JSObject res = new JSObject();
+                    res.put("ok", true);
+                    res.put("json", state.toString());
+                    call.resolve(res);
+                });
+            } catch (Exception e) {
+                getBridge().getActivity().runOnUiThread(() -> {
+                    JSObject res = new JSObject();
+                    res.put("ok", false);
+                    res.put("reason", String.valueOf(e.getMessage()));
+                    res.put("source", "screen");
+                    call.resolve(res);
+                });
+            }
+        }).start();
+    }
+
+    @PluginMethod
+    public void stopScreenCapture(PluginCall call) {
+        try {
+            if (screenDisplay != null) screenDisplay.release();
+            if (screenReader != null) screenReader.close();
+            if (screenProjection != null) screenProjection.stop();
+            if (screenThread != null) screenThread.quitSafely();
+        } catch (Exception ignored) { }
+        screenDisplay = null;
+        screenReader = null;
+        screenProjection = null;
+        screenThread = null;
+        screenHandler = null;
+        screenPixels = null;
+        screenFrameWidth = 0;
+        screenFrameHeight = 0;
+        screenReason = "STOPPED";
+        JSObject res = new JSObject();
+        res.put("ok", true);
+        res.put("stopped", true);
+        call.resolve(res);
     }
 
     // Download an APK from a GitHub URL and hand it to the system installer.

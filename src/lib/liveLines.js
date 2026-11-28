@@ -34,7 +34,8 @@ export const BALL_COLORS = {
 }
 
 export function colorForBall(ballId) {
-  return BALL_COLORS[String(ballId || '').toUpperCase()] || '#39FF14'
+  const base = String(ballId || '').split('-')[0].toUpperCase()
+  return BALL_COLORS[base] || '#39FF14'
 }
 
 export function normalizeCalibration(input) {
