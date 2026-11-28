@@ -295,7 +295,7 @@ public final class VMHookInstaller {
             PackageInfo info = new PackageInfo();
             info.packageName = app.packageName;
             info.versionName = app.versionName;
-            info.versionCode = app.versionCode;
+            info.versionCode = (int) app.versionCode;
             info.applicationInfo = applicationInfo(app);
             ActivityInfo[] activities = new ActivityInfo[app.activities.size()];
             for (int i = 0; i < activities.length; i++) {

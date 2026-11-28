@@ -17,6 +17,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -50,6 +51,10 @@ public class D0JOverlayService extends Service {
     private static final String CHANNEL_ID = "d0j_session";
     private static final int NOTIFICATION_ID = 7701;
     private static volatile boolean active = false;
+
+    public static boolean canOverlay(Context context) {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context);
+    }
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private WindowManager windowManager;

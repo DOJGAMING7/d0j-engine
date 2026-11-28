@@ -1,6 +1,7 @@
 package com.d0j.engine.vm;
 
 import android.app.AppOpsManager;
+import android.app.usage.UsageEvents;
 import android.app.usage.UsageStatsManager;
 import android.content.ContentProvider;
 import android.content.ContentValues;
@@ -336,12 +337,12 @@ public class SystemCallProvider extends ContentProvider {
             UsageStatsManager usm = (UsageStatsManager) context.getSystemService(Context.USAGE_STATS_SERVICE);
             if (usm == null) return null;
             long end = System.currentTimeMillis();
-            UsageStatsManager.UsageEvents events = usm.queryEvents(end - 15000, end);
-            UsageStatsManager.UsageEvents.Event event = new UsageStatsManager.UsageEvents.Event();
+            UsageEvents events = usm.queryEvents(end - 15000, end);
+            UsageEvents.Event event = new UsageEvents.Event();
             String last = null;
             while (events != null && events.hasNextEvent()) {
                 events.getNextEvent(event);
-                if (event.getEventType() == UsageStatsManager.UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                if (event.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND) {
                     last = event.getPackageName();
                 }
             }

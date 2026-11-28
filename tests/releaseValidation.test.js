@@ -100,6 +100,25 @@ test('native structure and bindings are honest', () => {
   assert.equal(matrix.versions[0].gates.liveLinesVerifiedOnDevice, false)
 })
 
+test('Java sources keep the compile-time imports and typed defaults', () => {
+  const daemon = read('android/app/src/main/java/com/d0j/engine/vm/VMDaemonService.java')
+  assert.match(daemon, /import android\.content\.ServiceConnection;/)
+
+  const overlay = read('android/app/src/main/java/com/d0j/engine/D0JOverlayService.java')
+  assert.match(overlay, /Settings\.canDrawOverlays\(context\)/)
+
+  const input = read('android/app/src/main/java/com/d0j/engine/vm/VMActivityInputInjector.java')
+  assert.match(input, /event\.setPressure\(0, pressure\[index\]\)/)
+
+  const provider = read('android/app/src/main/java/com/d0j/engine/vm/SystemCallProvider.java')
+  assert.match(provider, /import android\.app\.usage\.UsageEvents;/)
+  assert.ok(!provider.includes('UsageStatsManager.UsageEvents'))
+
+  const plugin = read('android/app/src/main/java/com/d0j/engine/D0JNativePlugin.java')
+  assert.ok(!plugin.includes('getDouble("x", 0)'))
+  assert.ok(!plugin.includes('getLong("base", 0)'))
+})
+
 test('stale native web assets are detected', () => {
   const temp = mkdtempSync(join(tmpdir(), 'd0j-validate-'))
   try {
