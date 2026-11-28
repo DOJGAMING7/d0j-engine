@@ -516,7 +516,7 @@ function Main() {
       hosted = await native.vmLaunch(pkg, discovery?.launchActivity || '').catch(() => ({ ok: false }))
     }
     if (hosted?.ok && hosted?.started === true) {
-      say(`Hosted ${game?.name || pkg} · in-window controls active`, 'running')
+      say(`In-window hosting requested for ${game?.name || pkg} · waiting for confirmation`, 'starting')
       await refreshNativeStatus()
       if (config.runTestOnLaunch) runQuickTest('launch').catch(() => {})
       return { ...session, hosted: true, launched: true, discovery }

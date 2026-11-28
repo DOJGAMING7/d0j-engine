@@ -25,7 +25,8 @@ test('the original exception is saved, not just logged', () => {
   const hook = read(vmDir + 'HookInstrumentation.java')
   assert.match(hook, /private static void saveHostingError\(Context context, String stage, Throwable error\)/)
   assert.match(hook, /saveHostingError\(context, "callActivityOnCreate", e\)/)
-  assert.match(hook, /saveHostingError\(context, "lifecycle", e\)/)
+  assert.match(hook, /saveHostingError\(context, stage, e\)/)
+  assert.match(hook, /hostedLifecycleFailed\(activity, e, "onDestroy"\)/)
   assert.match(hook, /saveHostingError\(core\.context\(\), "newActivity", e\)/)
 
   const hosting = read(vmDir + 'VMHosting.java')
@@ -38,6 +39,27 @@ test('the original exception is saved, not just logged', () => {
 
   const settings = read('src/screens/Settings.jsx')
   assert.ok(settings.includes('hostingInfo?.error'))
+})
+
+test('diagnostics keep every failure and use our own app context', () => {
+  const hosting = read(vmDir + 'VMHosting.java')
+  assert.match(hosting, /NEXT FAILURE/)
+  assert.match(hosting, /System\.currentTimeMillis\(\)/)
+
+  const host = read(vmDir + 'VMGameHost.java')
+  assert.match(host, /private static Context reportContext\(Activity activity\)/)
+  assert.match(host, /VMCore\.peek\(\)/)
+  assert.match(host, /VMHosting\.markStage\(report, "ACTIVITY_SWAP_START"\)/)
+
+  const hook = read(vmDir + 'HookInstrumentation.java')
+  assert.match(hook, /SUBSTITUTE_ATTEMPT/)
+  assert.match(hook, /if \(!"onDestroy"\.equals\(stage\)\)/)
+})
+
+test('status never claims a confirmed in-window host before proof', () => {
+  const app = read('src/App.jsx')
+  assert.ok(app.includes('In-window hosting requested for'))
+  assert.ok(!app.includes('in-window controls active'))
 })
 
 test('prepared game context is installed on the Activity before onCreate', () => {

@@ -77,23 +77,31 @@ public final class VMGameHost {
      */
     public static boolean apply(Activity activity, String packageName) {
         Prepared prepared = get(packageName);
+        Context report = reportContext(activity);
         if (activity == null || prepared == null) {
-            VMHosting.markStage(activity, "ACTIVITY_SWAP_NO_PREPARED:" + packageName);
+            VMHosting.markStage(report, "ACTIVITY_SWAP_NO_PREPARED:" + packageName);
             return false;
         }
         try {
-            VMHosting.markStage(activity, "ACTIVITY_SWAP_START");
+            VMHosting.markStage(report, "ACTIVITY_SWAP_START");
             setField(activity, "mBase", prepared.context);
             setField(activity, "mResources", prepared.resources);
             setField(activity, "mApplication", prepared.application);
             try { installPackageInfo(activity, prepared); } catch (Throwable ignored) { }
-            VMHosting.markStage(activity, "ACTIVITY_CONTEXT_SWAPPED");
+            VMHosting.markStage(report, "ACTIVITY_CONTEXT_SWAPPED");
             return true;
         } catch (Throwable e) {
-            VMHosting.markStage(activity, "ACTIVITY_SWAP_FAIL:" + describe(e));
-            VMHosting.markError(activity, "ACTIVITY_SWAP_FAIL\n" + stack(e));
+            VMHosting.markStage(report, "ACTIVITY_SWAP_FAIL:" + describe(e));
+            VMHosting.markError(report, "ACTIVITY_SWAP_FAIL\n" + stack(e));
             return false;
         }
+    }
+
+    /** Never rely on a game Activity's getApplicationContext() for our files. */
+    private static Context reportContext(Activity activity) {
+        VMCore core = VMCore.peek();
+        if (core != null && core.context() != null) return core.context();
+        return activity == null ? null : activity.getApplicationContext();
     }
 
     private static void installPackageInfo(Activity activity, Prepared prepared) throws Exception {

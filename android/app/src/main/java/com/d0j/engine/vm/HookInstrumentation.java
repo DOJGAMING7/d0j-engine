@@ -56,6 +56,7 @@ public final class HookInstrumentation extends Instrumentation {
                 String proxy = VMHookInstaller.proxyActivity(proxyIndex(className));
                 boolean redirected = className.equals(proxy) || className.equals(target);
                 if (redirected) {
+                    VMHosting.markStage(core.context(), "SUBSTITUTE_ATTEMPT:" + target);
                     ClassLoader loader = core.getLoader(pkg);
                     if (loader != null) {
                         Activity game = null;
@@ -121,42 +122,42 @@ public final class HookInstrumentation extends Instrumentation {
        half-initialised hosted Activity never kills the app process. */
     @Override public void callActivityOnPostCreate(Activity activity, Bundle icicle) {
         try { super.callActivityOnPostCreate(activity, icicle); }
-        catch (Throwable e) { hostedLifecycleFailed(activity, e); }
+        catch (Throwable e) { hostedLifecycleFailed(activity, e, "onPostCreate"); }
     }
 
     @Override public void callActivityOnStart(Activity activity) {
         try { super.callActivityOnStart(activity); }
-        catch (Throwable e) { hostedLifecycleFailed(activity, e); }
+        catch (Throwable e) { hostedLifecycleFailed(activity, e, "onStart"); }
     }
 
     @Override public void callActivityOnResume(Activity activity) {
         try { super.callActivityOnResume(activity); }
-        catch (Throwable e) { hostedLifecycleFailed(activity, e); }
+        catch (Throwable e) { hostedLifecycleFailed(activity, e, "onResume"); }
     }
 
     @Override public void callActivityOnPause(Activity activity) {
         try { super.callActivityOnPause(activity); }
-        catch (Throwable e) { hostedLifecycleFailed(activity, e); }
+        catch (Throwable e) { hostedLifecycleFailed(activity, e, "onPause"); }
     }
 
     @Override public void callActivityOnStop(Activity activity) {
         try { super.callActivityOnStop(activity); }
-        catch (Throwable e) { hostedLifecycleFailed(activity, e); }
+        catch (Throwable e) { hostedLifecycleFailed(activity, e, "onStop"); }
     }
 
     @Override public void callActivityOnRestart(Activity activity) {
         try { super.callActivityOnRestart(activity); }
-        catch (Throwable e) { hostedLifecycleFailed(activity, e); }
+        catch (Throwable e) { hostedLifecycleFailed(activity, e, "onRestart"); }
     }
 
     @Override public void callActivityOnDestroy(Activity activity) {
         try { D0JGameHud.detach(activity); } catch (Throwable ignored) { }
         try { super.callActivityOnDestroy(activity); }
-        catch (Throwable e) { hostedLifecycleFailed(activity, e); }
+        catch (Throwable e) { hostedLifecycleFailed(activity, e, "onDestroy"); }
     }
 
     /** Only swallow failures for a hosted game; our own UI failures stay visible. */
-    private static void hostedLifecycleFailed(Activity activity, Throwable e) {
+    private static void hostedLifecycleFailed(Activity activity, Throwable e, String stage) {
         Intent intent = activity == null ? null : activity.getIntent();
         if (intent == null || !intent.getBooleanExtra("vmSubstitute", false)) {
             if (e instanceof RuntimeException) throw (RuntimeException) e;
@@ -165,9 +166,12 @@ public final class HookInstrumentation extends Instrumentation {
         }
         VMCore core = VMCore.peek();
         Context context = core == null ? null : core.context();
-        saveHostingError(context, "lifecycle", e);
+        saveHostingError(context, stage, e);
         markCalled(activity);
-        hostingFailed(context, intent.getStringExtra("vmPackage"), "lifecycle: " + e);
+        // A late destroy error must not disable hosting that already worked.
+        if (!"onDestroy".equals(stage)) {
+            hostingFailed(context, intent.getStringExtra("vmPackage"), "lifecycle: " + e);
+        }
         Log.e(TAG, "Hosted lifecycle failed: " + e, e);
         try { activity.finish(); } catch (Throwable ignored) { }
     }

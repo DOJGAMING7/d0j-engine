@@ -48,7 +48,10 @@ public final class VMHosting {
 
     /** Original stack trace of a contained hosting failure, not the follow-on framework error. */
     public static void markError(Context context, String error) {
-        write(context, ERROR_FILE, error == null ? "" : error, ERROR_MAX_BYTES);
+        String entry = "at=" + System.currentTimeMillis() + "\n" + (error == null ? "" : error);
+        String previous = error(context);
+        String text = previous.isEmpty() ? entry : previous + "\n----- NEXT FAILURE -----\n" + entry;
+        write(context, ERROR_FILE, text, ERROR_MAX_BYTES);
     }
 
     public static String error(Context context) {
