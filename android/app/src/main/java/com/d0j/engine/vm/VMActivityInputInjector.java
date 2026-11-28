@@ -120,10 +120,18 @@ public final class VMActivityInputInjector implements VMInputInjector {
                                 : index == count - 1 ? MotionEvent.ACTION_UP : MotionEvent.ACTION_MOVE;
                         long now = SystemClock.uptimeMillis();
                         if (action == MotionEvent.ACTION_DOWN) downAt[0] = now;
-                        MotionEvent event = MotionEvent.obtain(
-                                downAt[0], now, action, xs[index], ys[index], 0);
-                        event.setPressure(0, pressure[index]);
-                        event.setSize(0, size[index]);
+                        MotionEvent.PointerProperties props = new MotionEvent.PointerProperties();
+                        props.id = 0;
+                        props.toolType = MotionEvent.TOOL_TYPE_FINGER;
+                        MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
+                        coords.x = xs[index];
+                        coords.y = ys[index];
+                        coords.pressure = pressure[index];
+                        coords.size = size[index];
+                        MotionEvent event = MotionEvent.obtain(downAt[0], now, action, 1,
+                                new MotionEvent.PointerProperties[]{props},
+                                new MotionEvent.PointerCoords[]{coords},
+                                0, 0, 1f, 1f, 0, 0, 0, 0);
                         activity.dispatchTouchEvent(event);
                     }
                 }, cumulative);

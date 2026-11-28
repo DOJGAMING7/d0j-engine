@@ -108,15 +108,17 @@ test('Java sources keep the compile-time imports and typed defaults', () => {
   assert.match(overlay, /Settings\.canDrawOverlays\(context\)/)
 
   const input = read('android/app/src/main/java/com/d0j/engine/vm/VMActivityInputInjector.java')
-  assert.match(input, /event\.setPressure\(0, pressure\[index\]\)/)
+  assert.match(input, /coords\.pressure = pressure\[index\]/)
+  assert.match(input, /new MotionEvent\.PointerCoords\[\]\{coords\}/)
 
   const provider = read('android/app/src/main/java/com/d0j/engine/vm/SystemCallProvider.java')
   assert.match(provider, /import android\.app\.usage\.UsageEvents;/)
   assert.ok(!provider.includes('UsageStatsManager.UsageEvents'))
 
   const plugin = read('android/app/src/main/java/com/d0j/engine/D0JNativePlugin.java')
-  assert.ok(!plugin.includes('getDouble("x", 0)'))
-  assert.ok(!plugin.includes('getLong("base", 0)'))
+  assert.match(plugin, /getDouble\("x", 0d\)\.floatValue\(\)/)
+  assert.match(plugin, /getDouble\("duration", 180d\)\.longValue\(\)/)
+  assert.match(plugin, /getLong\("base", 0L\)/)
 })
 
 test('stale native web assets are detected', () => {

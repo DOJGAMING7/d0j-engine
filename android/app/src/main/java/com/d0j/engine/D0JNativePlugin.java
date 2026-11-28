@@ -423,8 +423,8 @@ public class D0JNativePlugin extends Plugin {
     @PluginMethod
     public void vmInputTap(PluginCall call) {
         Bundle args = new Bundle();
-        args.putFloat("x", (float) call.getDouble("x", 0d));
-        args.putFloat("y", (float) call.getDouble("y", 0d));
+        args.putFloat("x", call.getDouble("x", 0d).floatValue());
+        args.putFloat("y", call.getDouble("y", 0d).floatValue());
         call.resolve(vmResult(vmCall("inputTap", args)));
     }
 
@@ -438,11 +438,11 @@ public class D0JNativePlugin extends Plugin {
     @PluginMethod
     public void vmInputSwipe(PluginCall call) {
         Bundle args = new Bundle();
-        args.putFloat("x1", (float) call.getDouble("x1", 0d));
-        args.putFloat("y1", (float) call.getDouble("y1", 0d));
-        args.putFloat("x2", (float) call.getDouble("x2", 0d));
-        args.putFloat("y2", (float) call.getDouble("y2", 0d));
-        args.putLong("duration", (long) call.getDouble("duration", 180d));
+        args.putFloat("x1", call.getDouble("x1", 0d).floatValue());
+        args.putFloat("y1", call.getDouble("y1", 0d).floatValue());
+        args.putFloat("x2", call.getDouble("x2", 0d).floatValue());
+        args.putFloat("y2", call.getDouble("y2", 0d).floatValue());
+        args.putLong("duration", call.getDouble("duration", 180d).longValue());
         call.resolve(vmResult(vmCall("inputSwipe", args)));
     }
 
