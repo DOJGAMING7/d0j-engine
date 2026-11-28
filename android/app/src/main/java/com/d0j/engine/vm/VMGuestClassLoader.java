@@ -28,7 +28,7 @@ public final class VMGuestClassLoader extends DexClassLoader {
 
     @Override protected Class<?> loadClass(String name, boolean resolve)
             throws ClassNotFoundException {
-        synchronized (getClassLoadingLock(name)) {
+        synchronized (this) {
             Class<?> found = findLoadedClass(name);
             if (found == null) {
                 if (isParentFirst(name)) {
