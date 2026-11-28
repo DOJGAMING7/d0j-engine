@@ -134,7 +134,6 @@ public final class VMGameHost {
         @Override public String getPackageName() { return packageName; }
         @Override public ApplicationInfo getApplicationInfo() { return info; }
         @Override public ClassLoader getClassLoader() { return loader; }
-        @Override public Application getApplication() { return application; }
         @Override public Context getApplicationContext() { return application == null ? this : application; }
     }
 }

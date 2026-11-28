@@ -22,6 +22,7 @@ test('game Resources and Application are built from the installed APKs', () => {
   assert.match(host, /getResources\(\)[\s\S]*return resources/)
   assert.match(host, /getApplicationInfo\(\)[\s\S]*return info/)
   assert.ok(!host.includes('Resources.getSystem()'), 'must not fall back to system resources')
+  assert.ok(!host.includes('Application getApplication()'), 'Context has no getApplication() override')
 })
 
 test('preparation runs before substitution and records each stage', () => {
