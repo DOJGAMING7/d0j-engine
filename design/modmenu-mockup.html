@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>D0J EnGine — Mod Menu Mockup (B/W)</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --panel: #121212;
+      --panel-2: #181818;
+      --row: #1c1c1c;
+      --row-hover: #242424;
+      --line: #303030;
+      --line-soft: #262626;
+      --text: #ffffff;
+      --muted: #a8a8a8;
+      --dim: #7a7a7a;
+      --active: #ffffff;
+      --ok: #ffffff;
+      --warn: #d0d0d0;
+      --danger: #ffffff;
+      --shadow: rgba(0, 0, 0, 0.7);
+      --radius: 18px;
+      --radius-sm: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { min-height: 100%; background: #050505; color: var(--text); font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    body { padding: 20px; display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
+    button, input { font: inherit; }
+    button { color: inherit; background: none; border: 0; cursor: pointer; }
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+    /* Mockup canvas */
+    .stage {
+      background: linear-gradient(180deg, #0b0b0b 0%, #040404 100%);
+      border: 1px solid var(--line-soft);
+      border-radius: 24px;
+      padding: 20px;
+      min-height: 720px;
+    }
+    .stage-title { font-size: 13px; letter-spacing: .18em; color: var(--muted); margin-bottom: 14px; text-transform: uppercase; }
+    .phone {
+      width: min(980px, 100%);
+      aspect-ratio: 16 / 9;
+      min-height: 520px;
+      margin: 0 auto;
+      border-radius: 28px;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255,255,255,.06), transparent 30%),
+        radial-gradient(circle at 80% 30%, rgba(255,255,255,.04), transparent 30%),
+        #0a0a0a;
+      border: 1px solid #2a2a2a;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 30px 80px rgba(0,0,0,.55);
+    }
+    .game-hint {
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      color: #4f4f4f; font-size: 24px; letter-spacing: .08em; font-weight: 600;
+      user-select: none;
+    }
+    .game-hint small { display: block; font-size: 12px; color: #555; letter-spacing: .12em; margin-top: 8px; text-align: center; }
+
+    /* Overlay - inspired by attached layout, B/W */
+    .overlay {
+      position: absolute;
+      inset: 18px;
+      display: flex;
+      gap: 12px;
+      filter: drop-shadow(0 16px 40px var(--shadow));
+    }
+    .main, .side {
+      background: rgba(18, 18, 18, 0.96);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(8px);
+    }
+    .main {
+      flex: 1;
+      min-width: 0;
+      border-radius: 24px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .side {
+      width: 84px;
+      flex: none;
+      border-radius: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 14px 0;
+    }
+
+    .header {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      gap: 12px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .logo {
+      width: 44px; height: 44px; border-radius: 14px;
+      background: #fff; color: #000;
+      display: grid; place-items: center;
+      font-weight: 800; font-size: 14px; letter-spacing: .02em;
+      flex: none;
+    }
+    .brand-copy { min-width: 0; }
+    .brand-copy b { display: block; font-size: 16px; font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
+    .brand-copy span { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .status-pill {
+      display: flex; align-items: center; gap: 10px;
+      background: #1b1b1b; border: 1px solid var(--line-soft);
+      padding: 8px 12px; border-radius: 14px;
+      font-size: 12px; font-weight: 600;
+      white-space: nowrap;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #fff;
+      box-shadow: 0 0 0 4px rgba(255,255,255,.08);
+    }
+    .spinner {
+      width: 16px; height: 16px; border-radius: 50%;
+      border: 2px solid #444; border-top-color: #fff;
+      animation: spin .9s linear infinite;
+      flex: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .content-wrap { flex: 1; min-height: 0; display: flex; }
+    .content {
+      flex: 1; min-height: 0; overflow: auto;
+      padding: 14px 16px 18px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .content::-webkit-scrollbar, .inventory::-webkit-scrollbar { width: 8px; }
+    .content::-webkit-scrollbar-thumb, .inventory::-webkit-scrollbar-thumb { background: #333; border-radius: 8px; }
+
+    .row {
+      min-height: 58px;
+      background: var(--row);
+      border: 1px solid var(--line-soft);
+      border-radius: 14px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .row.section {
+      min-height: 48px;
+      background: #151515;
+      border-color: #2a2a2a;
+    }
+    .section-mark {
+      width: 10px; height: 10px; border-radius: 3px;
+      background: #fff; flex: none;
+    }
+    .row .label { flex: 1; font-size: 15px; font-weight: 500; }
+    .row.section .label { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #f0f0f0; }
+    .row .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .label-wrap { flex: 1; min-width: 0; }
+
+    .switch {
+      position: relative; width: 56px; height: 30px; flex: none;
+      border-radius: 16px; background: #3a3a3a; border: 1px solid #4a4a4a;
+      transition: .18s ease;
+    }
+    .switch::after {
+      content: ""; position: absolute; top: 3px; left: 3px;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #fff; transition: .18s ease;
+    }
+    .switch.on { background: #fff; border-color: #fff; }
+    .switch.on::after { transform: translateX(26px); background: #000; }
+
+    .slider-row { align-items: stretch; flex-wrap: wrap; }
+    .slider-head { width: 100%; display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .slider-head .label { font-size: 15px; font-weight: 500; }
+    .value { font-size: 13px; color: #fff; font-weight: 600; min-width: 44px; text-align: right; }
+    input[type=range] {
+      width: 100%; -webkit-appearance: none; appearance: none;
+      height: 4px; border-radius: 4px; background: #404040; outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 2px solid #000;
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 2px solid #000;
+    }
+
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip {
+      padding: 8px 12px; border-radius: 10px; font-size: 12px; font-weight: 600;
+      background: #171717; border: 1px solid #3a3a3a; color: #ddd;
+    }
+    .chip.active { background: #fff; color: #000; border-color: #fff; }
+
+    .action-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .action {
+      min-height: 54px; border-radius: 14px;
+      border: 1px solid #3a3a3a; background: #191919;
+      display: grid; place-items: center; gap: 2px; padding: 8px;
+    }
+    .action b { font-size: 12px; letter-spacing: .03em; }
+    .action span { font-size: 10px; color: var(--muted); }
+    .action.primary { background: #fff; color: #000; border-color: #fff; }
+    .action.primary span { color: #333; }
+    .action.danger { border-color: #666; }
+
+    .note {
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px dashed #3a3a3a;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      background: #111;
+    }
+
+    .side .app {
+      width: 52px; height: 52px; border-radius: 16px;
+      background: #fff; color: #000; display: grid; place-items: center;
+      font-size: 12px; font-weight: 800;
+    }
+    .side .hr { width: 34px; height: 1px; background: #333; }
+    .tab, .close {
+      width: 52px; height: 52px; border-radius: 16px;
+      background: #1b1b1b; border: 1px solid #303030; color: #fff;
+      display: grid; place-items: center;
+    }
+    .tab svg, .close svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .tab.active { background: #fff; color: #000; border-color: #fff; }
+    .close { color: #fff; }
+
+    /* Notification mock */
+    .notif-wrap { position: absolute; left: 16px; bottom: 16px; width: min(360px, calc(100% - 32px)); display: grid; gap: 8px; }
+    .notif {
+      background: rgba(18,18,18,.96); border: 1px solid #333; border-radius: 16px;
+      padding: 12px 14px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+    }
+    .notif .title { font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+    .notif .body { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+    .notif .rowline { display: flex; align-items: center; gap: 10px; }
+    .notif .mini-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #444; border-top-color: #fff; animation: spin .9s linear infinite; }
+
+    /* Inventory panel */
+    .inventory {
+      background: #0f0f0f; border: 1px solid var(--line-soft); border-radius: 24px;
+      padding: 18px; position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow: auto;
+    }
+    .inventory h2 { font-size: 14px; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 12px; }
+    .inventory h3 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #fff; margin: 18px 0 8px; }
+    .inventory p, .inventory li { font-size: 13px; color: var(--muted); line-height: 1.55; }
+    .inventory ul { padding-left: 18px; display: grid; gap: 6px; }
+    .swatches { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; }
+    .swatch { border: 1px solid #2e2e2e; border-radius: 12px; overflow: hidden; background: #141414; }
+    .swatch-color { height: 34px; border-bottom: 1px solid #2e2e2e; }
+    .swatch-meta { padding: 8px; font-size: 11px; color: var(--muted); }
+    .swatch-meta b { display: block; color: #fff; font-size: 11px; margin-bottom: 2px; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; background: #1a1a1a; border: 1px solid #333; padding: 1px 5px; border-radius: 5px; color: #fff; }
+
+    @media (max-width: 1100px) {
+      body { grid-template-columns: 1fr; }
+      .inventory { position: static; max-height: none; }
+    }
+    @media (max-width: 760px) {
+      .phone { aspect-ratio: auto; min-height: 680px; }
+      .overlay { inset: 10px; gap: 8px; }
+      .side { width: 62px; border-radius: 20px; }
+      .tab, .close, .side .app { width: 44px; height: 44px; border-radius: 14px; }
+      .header { flex-direction: column; align-items: stretch; }
+      .status-pill { justify-content: center; }
+      .action-row { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <div class="stage-title">D0J EnGine — black & white mod menu mockup (layout reference inspired)</div>
+    <div class="phone">
+      <div class="game-hint">
+        8 BALL POOL SESSION
+        <small>MOD MENU OPENS IN GAME SESSION FLOW · NO DISPLAY-OVER-PERMISSION UX TARGET</small>
+      </div>
+
+      <div class="overlay" aria-label="D0J mod menu mockup">
+        <section class="main">
+          <header class="header">
+            <div class="brand">
+              <div class="logo">D0J</div>
+              <div class="brand-copy">
+                <b>D0J ENGINE</b>
+                <span>8 Ball Pool · v56.34.0 · Local session</span>
+              </div>
+            </div>
+            <div class="status-pill" id="statusPill">
+              <span class="spinner" aria-hidden="true"></span>
+              <span id="statusText">Finding shot...</span>
+            </div>
+          </header>
+
+          <div class="content-wrap">
+            <div class="content" id="content"></div>
+          </div>
+        </section>
+
+        <aside class="side">
+          <div class="app">8BP</div>
+          <div class="hr"></div>
+          <div id="tabs" style="display:flex; flex-direction:column; gap:10px;"></div>
+          <div class="hr"></div>
+          <button class="close" id="closeBtn" aria-label="Close menu" title="Close">
+            <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </aside>
+      </div>
+
+      <div class="notif-wrap">
+        <div class="notif">
+          <div class="rowline">
+            <div class="mini-spin" aria-hidden="true"></div>
+            <div>
+              <div class="title">D0J Engine working</div>
+              <div class="body">Finding shot · Auto play active · Tap notification to open menu</div>
+            </div>
+          </div>
+        </div>
+        <div class="notif">
+          <div class="title">Temp event</div>
+          <div class="body" id="tempEvent">Shot found · Prediction updated</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="inventory">
+    <h2>Mockup Inventory</h2>
+    <p>This is a <b style="color:#fff">layout/feature reference</b> for the next D0J build. It uses the attached overlay-menu structure (side tabs, header, rows/toggles/sliders) but with a <b style="color:#fff">black & white</b> visual system.</p>
+
+    <h3>Color System (B/W)</h3>
+    <div class="swatches">
+      <div class="swatch"><div class="swatch-color" style="background:#000"></div><div class="swatch-meta"><b>Background</b>#000000</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#121212"></div><div class="swatch-meta"><b>Panel</b>#121212</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#1c1c1c"></div><div class="swatch-meta"><b>Row</b>#1C1C1C</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#303030"></div><div class="swatch-meta"><b>Border</b>#303030</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#ffffff"></div><div class="swatch-meta"><b>Text/Active</b>#FFFFFF</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#a8a8a8"></div><div class="swatch-meta"><b>Muted</b>#A8A8A8</div></div>
+    </div>
+
+    <h3>Layout Rules</h3>
+    <ul>
+      <li>Client home stays clean. Cheats appear in mod menu during game session flow (3A).</li>
+      <li>Left/main: header + status + scrollable content. Right/side: app icon, tabs, close.</li>
+      <li>No long messy sections; grouped by tabs.</li>
+      <li>Temp status/toast and persistent notification states are visible.</li>
+      <li>Finding shot shows a rotating spinner/ball indicator.</li>
+    </ul>
+
+    <h3>Feature List</h3>
+    <ul>
+      <li><b style="color:#fff">Status/Test:</b> session status, quick test, launch 8BP, stop, notification state.</li>
+      <li><b style="color:#fff">Lines/Aim:</b> Show lines, Keep lines after shot, Power lock, Default power, Show pockets, Spin, Line opacity, Prediction test.</li>
+      <li><b style="color:#fff">Auto Play:</b> Enable auto play, mode, Failed break, finding-shot indicator, autoplay notifications.</li>
+      <li><b style="color:#fff">8 Ball:</b> Prioritize 9th ball, Paralysis opponent turn, Clean up shot, Golden shot target.</li>
+      <li><b style="color:#fff">Settings:</b> notifications, test behavior, clean client options; no auto-queue UI.</li>
+    </ul>
+
+    <h3>Planned Behavior Notes</h3>
+    <ul>
+      <li><span class="kbd">1 DONT BLOCK</span>: 8BP launch test runs but does not block launch.</li>
+      <li><span class="kbd">2B</span>: visible in-game mod menu target, no display-over-apps permission UX. Needs technical investigation / implementation choice.</li>
+      <li><span class="kbd">3A</span>: home screen clean; cheats in mod menu/game session flow.</li>
+      <li><span class="kbd">Prediction</span>: current demo table works; real 8BP live lines need a valid in-game drawing/injection/patch path.</li>
+    </ul>
+  </aside>
+
+  <script>
+    const tabs = [
+      {
+        id: 'status',
+        icon: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+        rows: [
+          { type: 'section', label: 'Session' },
+          { type: 'status', label: 'Client status', value: 'Working / Finding shot' },
+          { type: 'status', label: '8BP target', value: 'com.miniclip.eightballpool' },
+          { type: 'status', label: 'Overlay mode', value: '2B target — visible in-game menu' },
+          { type: 'section', label: 'Quick Actions' },
+          { type: 'actions' },
+          { type: 'note', label: 'Quick test runs on 8BP launch but does not block launch. Results appear as temp notifications and in this status tab.' }
+        ]
+      },
+      {
+        id: 'lines',
+        icon: '<path d="M4 20L20 4"/><path d="M14 4h6v6"/><circle cx="7" cy="17" r="2"/>',
+        rows: [
+          { type: 'section', label: 'Line Prediction' },
+          { type: 'toggle', label: 'Show lines', on: true, hint: 'Draw prediction path' },
+          { type: 'toggle', label: 'Keep lines after shot', on: true, hint: 'Keep guide visible until next aim' },
+          { type: 'toggle', label: 'Power lock', on: false, hint: 'Lock power value' },
+          { type: 'slider', label: 'Default power', min: 0, max: 100, value: 74, suffix: '%' },
+          { type: 'toggle', label: 'Show pockets', on: true, hint: 'Highlight selected pocket' },
+          { type: 'slider', label: 'Spin', min: -100, max: 100, value: 0, suffix: '' },
+          { type: 'slider', label: 'Line opacity', min: 10, max: 100, value: 85, suffix: '%' },
+          { type: 'note', label: 'Demo table prediction already works. Real 8BP live lines require an in-game drawing path (overlay/injection/patch) — not just display-over-apps permission toggle.' }
+        ]
+      },
+      {
+        id: 'autoplay',
+        icon: '<path d="M8 5l11 7-11 7z"/><path d="M4 5v14"/>',
+        rows: [
+          { type: 'section', label: 'Auto Play' },
+          { type: 'toggle', label: 'Enable auto play', on: false, hint: 'Simulated/local engine control' },
+          { type: 'chips', label: 'Auto play mode', options: ['Pro Fast', 'Pro Player', 'Fast Mode'], active: 'Pro Fast' },
+          { type: 'toggle', label: 'Failed break', on: false, hint: 'Break handling behavior' },
+          { type: 'section', label: 'Live Feedback' },
+          { type: 'status', label: 'Shot search', value: 'Rotating ball indicator while finding shot' },
+          { type: 'status', label: 'Temp notifications', value: 'Finding shot / Shot found / Starting autoplay' }
+        ]
+      },
+      {
+        id: 'eightball',
+        icon: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2"/><path d="M12 8.8v6.4"/>',
+        rows: [
+          { type: 'section', label: '8 Ball Play' },
+          { type: 'toggle', label: 'Prioritize 9th ball', on: false },
+          { type: 'toggle', label: 'Paralysis opponent turn', on: false },
+          { type: 'toggle', label: 'Clean up shot', on: false },
+          { type: 'section', label: 'Golden Shot' },
+          { type: 'chips', label: 'Golden shot target', options: ['1', '2', '3', '4'], active: '1' },
+          { type: 'note', label: 'Golden target: center [1] to last ring [4]. Auto queue is hidden/removed from client UI in this clean build direction.' }
+        ]
+      },
+      {
+        id: 'settings',
+        icon: '<path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="17" r="2"/>',
+        rows: [
+          { type: 'section', label: 'Client Behavior' },
+          { type: 'toggle', label: 'Persistent notification', on: true, hint: 'Show D0J working status' },
+          { type: 'toggle', label: 'Temp cheat notifications', on: true, hint: 'Finding shot, shot found, etc.' },
+          { type: 'toggle', label: 'Run quick test on 8BP launch', on: true, hint: 'Does not block launch' },
+          { type: 'toggle', label: 'Show test report in menu', on: true },
+          { type: 'section', label: 'Clean Build' },
+          { type: 'status', label: 'Home screen', value: 'Clean — no cheat clutter' },
+          { type: 'status', label: 'Auto queue UI', value: 'Hidden/removed' },
+          { type: 'status', label: 'Purchase guard', value: 'Decision needed: removed or scoped?' }
+        ]
+      }
+    ];
+
+    const content = document.getElementById('content');
+    const tabsEl = document.getElementById('tabs');
+    const statusText = document.getElementById('statusText');
+    const tempEvent = document.getElementById('tempEvent');
+
+    function makeSwitch(on, ariaLabel) {
+      const btn = document.createElement('button');
+      btn.className = 'switch' + (on ? ' on' : '');
+      btn.type = 'button';
+      btn.setAttribute('role', 'switch');
+      btn.setAttribute('aria-checked', on ? 'true' : 'false');
+      btn.setAttribute('aria-label', ariaLabel);
+      btn.addEventListener('click', () => {
+        const next = btn.classList.toggle('on');
+        btn.setAttribute('aria-checked', next ? 'true' : 'false');
+        tempEvent.textContent = `${ariaLabel}: ${next ? 'ON' : 'OFF'}`;
+      });
+      return btn;
+    }
+
+    function renderRows(rows) {
+      content.innerHTML = '';
+      rows.forEach(row => {
+        if (row.type === 'section') {
+          const el = document.createElement('div');
+          el.className = 'row section';
+          el.innerHTML = `<span class="section-mark"></span><div class="label">${row.label}</div>`;
+          content.appendChild(el);
+          return;
+        }
+        if (row.type === 'toggle') {
+          const el = document.createElement('div');
+          el.className = 'row';
+          const wrap = document.createElement('div');
+          wrap.className = 'label-wrap';
+          wrap.innerHTML = `<div class="label">${row.label}</div>${row.hint ? `<div class="hint">${row.hint}</div>` : ''}`;
+          el.appendChild(wrap);
+          el.appendChild(makeSwitch(!!row.on, row.label));
+          content.appendChild(el);
+          return;
+        }
+        if (row.type === 'slider') {
+          const el = document.createElement('div');
+          el.className = 'row slider-row';
+          const head = document.createElement('div');
+          head.className = 'slider-head';
+          const value = document.createElement('div');
+          value.className = 'value';
+          value.textContent = `${row.value}${row.suffix || ''}`;
+          head.innerHTML = `<div class="label">${row.label}</div>`;
+          head.appendChild(value);
+          const input = document.createElement('input');
+          input.type = 'range';
+          input.min = row.min;
+          input.max = row.max;
+          input.value = row.value;
+          input.addEventListener('input', () => {
+            value.textContent = `${input.value}${row.suffix || ''}`;
+            tempEvent.textContent = `${row.label}: ${input.value}${row.suffix || ''}`;
+          });
+          el.appendChild(head);
+          el.appendChild(input);
+          content.appendChild(el);
+          return;
+        }
+        if (row.type === 'chips') {
+          const el = document.createElement('div');
+          el.className = 'row';
+          el.style.flexDirection = 'column';
+          el.style.alignItems = 'stretch';
+          const label = document.createElement('div');
+          label.className = 'label';
+          label.style.marginBottom = '10px';
+          label.textContent = row.label;
+          const chips = document.createElement('div');
+          chips.className = 'chips';
+          row.options.forEach(opt => {
+            const c = document.createElement('button');
+            c.type = 'button';
+            c.className = 'chip' + (opt === row.active ? ' active' : '');
+            c.textContent = opt;
+            c.addEventListener('click', () => {
+              chips.querySelectorAll('.chip').forEach(x => x.classList.remove('active'));
+              c.classList.add('active');
+              tempEvent.textContent = `${row.label}: ${opt}`;
+            });
+            chips.appendChild(c);
+          });
+          el.appendChild(label);
+          el.appendChild(chips);
+          content.appendChild(el);
+          return;
+        }
+        if (row.type === 'status') {
+          const el = document.createElement('div');
+          el.className = 'row';
+          el.innerHTML = `<div class="label-wrap"><div class="label">${row.label}</div><div class="hint">${row.value}</div></div><div style="color:#fff;font-size:12px;font-weight:700;">●</div>`;
+          content.appendChild(el);
+          return;
+        }
+        if (row.type === 'actions') {
+          const el = document.createElement('div');
+          el.className = 'action-row';
+          [
+            ['LAUNCH 8BP', 'Start session', 'primary'],
+            ['RUN TEST', 'No block', ''],
+            ['STOP', 'Safe halt', 'danger'],
+            ['OPEN MENU', 'Notification tap', '']
+          ].forEach(([title, sub, cls]) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'action ' + cls;
+            b.innerHTML = `<b>${title}</b><span>${sub}</span>`;
+            b.addEventListener('click', () => {
+              tempEvent.textContent = `${title} tapped`;
+              if (title === 'RUN TEST') statusText.textContent = 'Running quick test...';
+              if (title === 'STOP') statusText.textContent = 'Stopped';
+              if (title === 'LAUNCH 8BP') statusText.textContent = 'Launching 8BP / Finding shot...';
+            });
+            el.appendChild(b);
+          });
+          content.appendChild(el);
+          return;
+        }
+        if (row.type === 'note') {
+          const el = document.createElement('div');
+          el.className = 'note';
+          el.textContent = row.label;
+          content.appendChild(el);
+        }
+      });
+    }
+
+    tabs.forEach((tab, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'tab' + (idx === 0 ? ' active' : '');
+      btn.type = 'button';
+      btn.title = tab.id;
+      btn.setAttribute('aria-label', tab.id);
+      btn.innerHTML = `<svg viewBox="0 0 24 24">${tab.icon}</svg>`;
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        btn.classList.add('active');
+        renderRows(tab.rows);
+      });
+      tabsEl.appendChild(btn);
+    });
+
+    renderRows(tabs[0].rows);
+
+    document.getElementById('closeBtn').addEventListener('click', () => {
+      tempEvent.textContent = 'Menu closed — notification remains active';
+      document.querySelector('.overlay').style.opacity = '0.25';
+      setTimeout(() => { document.querySelector('.overlay').style.opacity = '1'; }, 700);
+    });
+
+    // Demo status rotation
+    const states = [
+      'Finding shot...',
+      'Shot found',
+      'Autoplay running',
+      'Waiting for turn'
+    ];
+    let i = 0;
+    setInterval(() => {
+      i = (i + 1) % states.length;
+      statusText.textContent = states[i];
+      tempEvent.textContent = states[i] === 'Shot found' ? 'Shot found · prediction updated' : states[i];
+    }, 2600);
+  </script>
+</body>
+</html>
