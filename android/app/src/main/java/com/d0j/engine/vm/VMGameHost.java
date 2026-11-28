@@ -185,7 +185,7 @@ public final class VMGameHost {
         // from the game's Resources and install it directly on the Activity.
         Resources.Theme gameTheme = prepared.resources.newTheme();
         gameTheme.applyStyle(theme, true);
-        // Android 16 hides ContextThemeWrapper.mTheme from getDeclaredField(name),
+        // Newer Android (including Android 17 / SDK 37) hides ContextThemeWrapper.mTheme from getDeclaredField(name),
         // so locate the Theme field by type instead.
         setThemeField(activity, gameTheme, report);
         try { setField(activity, "mThemeResource", theme); } catch (Throwable ignored) { }
