@@ -231,7 +231,7 @@ export default function ModMenu({
           <button className="mm-action" onClick={onOpenTable}><b>OPEN DEMO</b><span>Table test</span></button>
           <button className="mm-action" onClick={liveOverlay ? onStopLiveOverlay : onStartLiveOverlay}><b>{liveOverlay ? 'STOP LIVE LINES' : 'START LIVE LINES'}</b><span>Overlay over game</span></button>
         </div>
-        <div className="mm-note">Live overlay: {liveOverlay ? (liveOverlayInfo?.ok ? `${liveOverlayInfo.balls} balls · ${liveOverlayInfo.source}${liveOverlayInfo.simulated ? ' (simulated)' : ''}` : (liveOverlayInfo?.reason || 'waiting for measured state')) : 'off'} · screen reading {screenCapture ? 'on' : 'off'}. Demo table prediction is local/simulated.</div>
+        <div className="mm-note">Local preview: {liveOverlay ? (liveOverlayInfo?.ok ? `${liveOverlayInfo.balls} balls · ${liveOverlayInfo.source}${liveOverlayInfo.simulated ? ' (simulated)' : ''}` : (liveOverlayInfo?.reason || 'idle')) : 'off'} · no screen capture. Real game lines require the native VM engine.</div>
       </>
     )
 

@@ -53,7 +53,6 @@ function Main() {
   const liveLastRef = useRef('')
   const liveConfigRef = useRef(config)
   const liveCalibrationRef = useRef(calibration)
-  const screenCaptureRef = useRef(false)
   const autoActiveRef = useRef(false)
   const autoTimerRef = useRef(null)
   const autoLastShotRef = useRef(0)
@@ -141,16 +140,16 @@ function Main() {
       } catch (e) { add('Prediction script', false, e?.message || e) }
       step = 'Config'
       add('Config', !!config && typeof config.power === 'number', `power ${config?.power}`)
-      step = 'Screen capture bridge'
+      step = 'VM state bridge'
       try {
-        const screenProbe = await native.readScreenState({})
-        add('Screen capture bridge', screenProbe?.source === 'screen' || !native.isNative(),
-          native.isNative() ? (screenProbe?.reason || 'ready') : 'web mode')
-      } catch (e) { add('Screen capture bridge', false, e?.message || e) }
-      step = 'Ball detection'
+        const stateProbe = await native.vmState()
+        add('VM state bridge', stateProbe?.ok !== false || !native.isNative(),
+          native.isNative() ? (stateProbe?.ok ? 'ready' : (stateProbe?.reason || 'unavailable')) : 'web mode')
+      } catch (e) { add('VM state bridge', false, e?.message || e) }
+      step = 'Line geometry'
       try {
         const sample = {
-          source: 'screen', simulated: false, width: 600, height: 900,
+          source: 'vm', simulated: true, width: 600, height: 900,
           ballRadius: 11, pocketRadius: 18, cueX: 300, cueY: 660,
           balls: [{ id: '1', x: 300, y: 300 }, { id: '2', x: 180, y: 420 }],
           pockets: [
@@ -159,9 +158,9 @@ function Main() {
           ]
         }
         const built = buildLiveOverlay(sample, { calibration: DEFAULT_CALIBRATION })
-        add('Ball detection', built.ok && built.lines.length > 0 && built.source === 'screen' && !built.simulated,
-          built.ok ? `${built.balls} balls · ${built.source}` : built.reason)
-      } catch (e) { add('Ball detection', false, e?.message || e) }
+        add('Line geometry', built.ok && built.lines.length > 0 && built.simulated === true,
+          built.ok ? `${built.balls} balls · ${built.source} (simulated)` : built.reason)
+      } catch (e) { add('Line geometry', false, e?.message || e) }
       step = 'VM hooks'
       try {
         const hooks = await native.vmHooks()
@@ -297,20 +296,8 @@ function Main() {
     }
   }
 
-  const readScreenSnapshot = async () => {
-    const res = await native.readScreenState(liveCalibrationRef.current).catch(() => ({ ok: false, reason: 'SCREEN_STATE_CALL_FAILED' }))
-    if (!res?.ok) return { ok: false, reason: res?.reason || 'SCREEN_STATE_FAILED', source: 'screen', simulated: false }
-    try {
-      return JSON.parse(res.json)
-    } catch {
-      return { ok: false, reason: 'SCREEN_STATE_PARSE_FAILED', source: 'screen', simulated: false }
-    }
-  }
-
   const pushLiveOverlay = async () => {
-    const res = screenCaptureRef.current
-      ? await readScreenSnapshot()
-      : await native.vmState().catch(() => ({ ok: false, reason: 'STATE_CALL_FAILED' }))
+    const res = await native.vmState().catch(() => ({ ok: false, reason: 'STATE_CALL_FAILED' }))
     if (!res?.ok) {
       setLiveOverlayInfo({ ok: false, reason: res?.reason || res?.code || 'STATE_UNAVAILABLE', lines: [] })
       await native.clearOverlayLines().catch(() => {})
@@ -344,14 +331,10 @@ function Main() {
 
   const startLiveOverlay = async () => {
     if (liveActiveRef.current) return
-    if (!screenCaptureRef.current) {
-      say('LIVE OVERLAY: screen capture not active · start a session and allow capture', 'error')
-      return
-    }
     liveActiveRef.current = true
     liveLastRef.current = ''
     setLiveOverlay(true)
-    say('LIVE OVERLAY: reading screen', 'running')
+    say('LOCAL PREVIEW: simulated state only · no screen capture', 'running')
     await liveTick()
   }
 
@@ -362,13 +345,8 @@ function Main() {
       clearTimeout(liveTimerRef.current)
       liveTimerRef.current = null
     }
-    if (screenCaptureRef.current) {
-      await native.stopScreenCapture().catch(() => {})
-      screenCaptureRef.current = false
-      setScreenCapture(false)
-    }
     await native.clearOverlayLines().catch(() => {})
-    say('LIVE OVERLAY: stopped', 'stopped')
+    say('LOCAL PREVIEW: stopped', 'stopped')
   }
 
   const updateCalibration = patch => {
@@ -415,9 +393,7 @@ function Main() {
     const liveConfig = autoConfigRef.current
     try {
       if (liveConfig.autoQueue) await runQueueSteps()
-      const res = screenCaptureRef.current
-        ? await readScreenSnapshot()
-        : await native.vmState().catch(() => ({ ok: false, reason: 'STATE_CALL_FAILED' }))
+      const res = await native.vmState().catch(() => ({ ok: false, reason: 'STATE_CALL_FAILED' }))
       if (!res?.ok) {
         setAutoLiveInfo({ ok: false, reason: res?.reason || 'STATE_UNAVAILABLE', stats: { ...stats } })
       } else {
@@ -435,7 +411,7 @@ function Main() {
           const turn = turnKey.toLowerCase()
           const hasTurn = turnKey.length > 0
           const yourTurn = hasTurn && (turn.includes('you') || turn.includes('your') || turn.includes('your_turn'))
-          const turnReason = hasTurn ? '' : (screenCaptureRef.current ? 'turn not detected from screen' : 'turn unknown')
+          const turnReason = hasTurn ? '' : 'turn unknown'
           const motion = humanMotionRef.current
           if (yourTurn && turnKeyRef.current !== turnKey) {
             turnKeyRef.current = turnKey
@@ -523,23 +499,12 @@ function Main() {
       say('Enable Display over other apps for session overlay, then tap Launch again', 'error')
       return { ok: false, error: 'OVERLAY_PERMISSION_REQUIRED' }
     }
-    // Start the overlay service first, before any MediaProjection token exists.
-    // The overlay only uses the special-use FGS type: declaring mediaProjection
-    // on it requires a system capture token we do not have and crashes Android 14.
+    // No screen capture is used. Snake Engine hosts games in its own VM; this
+    // build only starts the session overlay and opens the real game.
     const session = await native.startSession({ packageName: pkg, launchGame: false })
       .catch(e => ({ ok: false, error: String(e?.message || e) }))
     if (session?.ok) {
       setConfigState(prev => ({ ...prev, sessionActive: true }))
-      // Ask for capture while the app is still in the foreground.
-      if (native.isNative()) {
-        const capture = await native.startScreenCapture()
-          .catch(e => ({ ok: false, reason: String(e?.message || e) }))
-        screenCaptureRef.current = capture?.ok === true
-        setScreenCapture(screenCaptureRef.current)
-        if (!screenCaptureRef.current) {
-          say(`Screen capture off (${capture?.reason || 'denied'}) · live lines unavailable`, 'error')
-        }
-      }
       const launch = await native.launchGame(pkg)
       say(launch?.ok
         ? `Session active · ${game?.name || pkg}`
@@ -582,11 +547,6 @@ function Main() {
     if (liveTimerRef.current) {
       clearTimeout(liveTimerRef.current)
       liveTimerRef.current = null
-    }
-    if (screenCaptureRef.current) {
-      await native.stopScreenCapture().catch(() => {})
-      screenCaptureRef.current = false
-      setScreenCapture(false)
     }
     await native.clearOverlayLines().catch(() => {})
     await native.stopSession().catch(() => {})

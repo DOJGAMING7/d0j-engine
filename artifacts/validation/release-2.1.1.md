@@ -7,7 +7,7 @@
 - PASS package: package 2.1.1 = gradle 2.1.1 (code 7)
 - PASS scripts: 2 scripts byte-identical in 4 locations
 - PASS webAssets: 9 built files copied to native assets
-- PASS java: 47 Java sources balanced, no accessibility declarations
+- PASS java: 46 Java sources balanced, no accessibility declarations
 - PASS manifest: daemon, 4 child processes, mem/input providers, overlay declared
 - PASS bindings: honest UNMEASURED for com.miniclip.eightballpool 56.34.0 (code 4064)
 - PASS versionMatrix: 3 version profiles; hook stub until device attach
