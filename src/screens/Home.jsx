@@ -26,6 +26,7 @@ export default function Home({
   sessionStatus,
   testReport,
   menuSignal,
+  menuCloseSignal,
   onOpenSettings,
   onRunScript,
   runningScript,
@@ -44,6 +45,10 @@ export default function Home({
   useEffect(() => {
     if (menuSignal > 0) setMenuOpen(true)
   }, [menuSignal])
+
+  useEffect(() => {
+    if (menuCloseSignal > 0) setMenuOpen(false)
+  }, [menuCloseSignal])
 
   return (
     <main className="app-shell bw-home">

@@ -35,7 +35,7 @@ public final class VMHookInstaller {
         if (lastReport != null) return lastReport;
         try {
             return build("NOT_ATTEMPTED", "NOT_ATTEMPTED", "NOT_ATTEMPTED", "NOT_ATTEMPTED",
-                    false, "Hooks not attached yet");
+                    "UNAVAILABLE", false, "Hooks not attached yet");
         } catch (Exception ignored) {
             return new JSONObject();
         }
@@ -70,16 +70,22 @@ public final class VMHookInstaller {
             Log.w(TAG, "PackageManager hook failed", e);
         }
 
-        boolean ready = "ATTACHED".equals(instrumentation)
+        boolean redirectReady = "ATTACHED".equals(instrumentation);
+        boolean ready = redirectReady
                 && "ATTACHED".equals(activityManager)
                 && "ATTACHED".equals(packageManager);
-        if (ready) VMRuntime.install(new AttachedInstrumentation());
+        // Redirect can work from instrumentation alone. Keep it alive even if
+        // ActivityManager/PackageManager identity hooks fail on this Android.
+        if (redirectReady) VMRuntime.install(new AttachedInstrumentation());
         else VMRuntime.resetToStub();
 
+        String redirect = redirectReady ? "AVAILABLE" : "UNAVAILABLE";
+        String detail = "inst=" + instrumentation + " am=" + activityManager + " pm=" + packageManager;
         JSONObject result = null;
         try {
-            result = build(hidden, instrumentation, activityManager, packageManager, ready,
-                    ready ? "HOOKS_ATTACHED_NOT_DEVICE_VERIFIED" : (failure == null ? "ONE_OR_MORE_HOOKS_FAILED" : failure));
+            result = build(hidden, instrumentation, activityManager, packageManager, redirect, ready,
+                    ready ? "HOOKS_ATTACHED_NOT_DEVICE_VERIFIED"
+                            : (failure == null ? "ONE_OR_MORE_HOOKS_FAILED · " + detail : failure + " · " + detail));
         } catch (Exception ignored) { }
         if (result == null) result = new JSONObject();
         lastReport = result;
@@ -96,12 +102,13 @@ public final class VMHookInstaller {
     }
 
     private static JSONObject build(String hidden, String instrumentation, String activityManager,
-                                    String packageManager, boolean ready, String reason) throws Exception {
+                                    String packageManager, String redirect, boolean ready, String reason) throws Exception {
         JSONObject value = new JSONObject();
         value.put("hiddenApi", hidden);
         value.put("instrumentation", instrumentation);
         value.put("activityManager", activityManager);
         value.put("packageManager", packageManager);
+        value.put("redirect", redirect);
         value.put("ready", ready);
         value.put("verifiedOnDevice", false);
         value.put("state", ready ? "HOOK_ATTACHED" : "HOOK_PENDING");
@@ -129,39 +136,98 @@ public final class VMHookInstaller {
     }
 
     private static String hookActivityManager(Context context) throws Exception {
-        Class<?> managerClass = Class.forName("android.app.ActivityManager");
-        Method getService = managerClass.getDeclaredMethod("getService");
-        getService.setAccessible(true);
-        Object original = getService.invoke(null);
+        Object original = null;
+        Throwable serviceFailure = null;
+        String[] managers = { "android.app.ActivityManager", "android.app.ActivityTaskManager" };
+        for (String name : managers) {
+            try {
+                Class<?> manager = Class.forName(name);
+                Method getService = manager.getDeclaredMethod("getService");
+                getService.setAccessible(true);
+                Object service = getService.invoke(null);
+                if (service != null) { original = service; break; }
+            } catch (Throwable e) {
+                if (serviceFailure == null) serviceFailure = e;
+            }
+        }
+        if (original == null) {
+            throw new IllegalStateException("AM getService: "
+                    + (serviceFailure == null ? "NO_SERVICE" : describe(serviceFailure)));
+        }
+
         Class<?> api = Class.forName("android.app.IActivityManager");
         Object proxy = Proxy.newProxyInstance(api.getClassLoader(), new Class<?>[] { api },
                 new ActivityManagerHandler(original, context.getApplicationContext()));
-        Field singleton;
-        try {
-            singleton = managerClass.getDeclaredField("IActivityManagerSingleton");
-        } catch (NoSuchFieldException missing) {
-            singleton = Class.forName("android.app.ActivityTaskManager")
-                    .getDeclaredField("IActivityTaskManagerSingleton");
+
+        Field singleton = null;
+        Throwable fieldFailure = null;
+        String[][] candidates = {
+                { "android.app.ActivityManager", "IActivityManagerSingleton" },
+                { "android.app.ActivityTaskManager", "IActivityTaskManagerSingleton" }
+        };
+        for (String[] candidate : candidates) {
+            try {
+                Field found = Class.forName(candidate[0]).getDeclaredField(candidate[1]);
+                found.setAccessible(true);
+                if (found.get(null) != null) { singleton = found; break; }
+            } catch (Throwable e) {
+                if (fieldFailure == null) fieldFailure = e;
+            }
         }
-        singleton.setAccessible(true);
-        Object holder = singleton.get(null);
-        Field instance = holder.getClass().getDeclaredField("mInstance");
-        instance.setAccessible(true);
-        instance.set(holder, proxy);
+        if (singleton == null) {
+            throw new IllegalStateException("AM singleton: "
+                    + (fieldFailure == null ? "NO_SINGLETON" : describe(fieldFailure)));
+        }
+        try {
+            Object holder = singleton.get(null);
+            Field instance = holder.getClass().getDeclaredField("mInstance");
+            instance.setAccessible(true);
+            instance.set(holder, proxy);
+        } catch (Throwable e) {
+            throw new IllegalStateException("AM proxy set: " + describe(e));
+        }
         return "ATTACHED";
     }
 
     private static String hookPackageManager(Context context) throws Exception {
-        Class<?> appGlobals = Class.forName("android.app.AppGlobals");
-        Method getService = appGlobals.getDeclaredMethod("getPackageManager");
-        getService.setAccessible(true);
-        Object original = getService.invoke(null);
+        Object original = null;
+        Throwable failure = null;
+        try {
+            Class<?> appGlobals = Class.forName("android.app.AppGlobals");
+            Method getService = appGlobals.getDeclaredMethod("getPackageManager");
+            getService.setAccessible(true);
+            original = getService.invoke(null);
+        } catch (Throwable e) {
+            failure = e;
+        }
+        if (original == null) {
+            try {
+                Class<?> threadClass = Class.forName("android.app.ActivityThread");
+                Method current = threadClass.getDeclaredMethod("currentActivityThread");
+                current.setAccessible(true);
+                Object thread = current.invoke(null);
+                Method getPackageManager = threadClass.getDeclaredMethod("getPackageManager");
+                getPackageManager.setAccessible(true);
+                original = getPackageManager.invoke(thread);
+            } catch (Throwable e) {
+                if (failure == null) failure = e;
+            }
+        }
+        if (original == null) {
+            throw new IllegalStateException("PM getService: "
+                    + (failure == null ? "NO_SERVICE" : describe(failure)));
+        }
+
         Class<?> api = Class.forName("android.content.pm.IPackageManager");
         Object proxy = Proxy.newProxyInstance(api.getClassLoader(), new Class<?>[] { api },
                 new PackageManagerHandler(original, context.getApplicationContext()));
-        Field field = Class.forName("android.content.pm.PackageManager").getDeclaredField("sPackageManager");
-        field.setAccessible(true);
-        field.set(null, proxy);
+        try {
+            Field field = Class.forName("android.content.pm.PackageManager").getDeclaredField("sPackageManager");
+            field.setAccessible(true);
+            field.set(null, proxy);
+        } catch (Throwable e) {
+            throw new IllegalStateException("PM proxy set: " + describe(e));
+        }
         return "ATTACHED";
     }
 

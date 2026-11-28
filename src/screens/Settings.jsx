@@ -55,6 +55,7 @@ export default function Settings({
   const [bindingInfo, setBindingInfo] = useState(null)
   const [probeInfo, setProbeInfo] = useState(null)
   const [probeResult, setProbeResult] = useState(null)
+  const [probeCopied, setProbeCopied] = useState(false)
   const [readerProcess, setReaderProcess] = useState('0')
   const [probeBase, setProbeBase] = useState('')
   const [probeLength, setProbeLength] = useState('4096')
@@ -113,6 +114,17 @@ export default function Settings({
     }
     setProbeResult(res)
     await refreshVm()
+  }
+
+  const copyProbe = async () => {
+    if (!probeResult) return
+    const text = JSON.stringify(probeResult, null, 2)
+    try {
+      await navigator.clipboard.writeText(text)
+      setProbeCopied(true)
+    } catch (e) {
+      setVmMsg(`Copy failed: ${e?.message || e}`)
+    }
   }
 
   const vmAction = async (action, label) => {
@@ -195,15 +207,16 @@ export default function Settings({
 
         <section className="panel">
           <h2>VM Host (rootless) · step 2</h2>
-          <p>APK parsing, DEX classloading and native-library extraction are real. The framework hook is not attached, so hosted activities cannot start yet.</p>
+          <p>APK parsing, DEX classloading and native-library extraction are real. Activity redirect can work from the instrumentation hook even when ActivityManager/PackageManager hooks fail; the detail line shows exactly why.</p>
           <div className="script-row">
             <div><b>Host state</b><small>{vmInfo?.ready ? 'HOOK READY' : (vmInfo?.reason || 'SUBSTRATE ONLY')}</small></div>
             <button className="btn ghost" onClick={refreshVm}>Refresh</button>
           </div>
           <div className="script-row">
-            <div><b>Framework hooks</b><small>{hookInfo?.state || 'PENDING'} · inst={hookInfo?.instrumentation || '—'} · am={hookInfo?.activityManager || '—'} · pm={hookInfo?.packageManager || '—'}</small></div>
+            <div><b>Framework hooks</b><small>{hookInfo?.state || 'PENDING'} · redirect={hookInfo?.redirect || 'UNAVAILABLE'} · inst={hookInfo?.instrumentation || '—'} · am={hookInfo?.activityManager || '—'} · pm={hookInfo?.packageManager || '—'}</small></div>
             <button className="btn primary" disabled={vmBusy} onClick={() => vmAction(() => native.vmAttach(), 'Hooks')}>Attach</button>
           </div>
+          {hookInfo?.reason ? <div className="meta-line">Hook detail: {hookInfo.reason}</div> : null}
           <label className="field-label">APK path on device</label>
           <div className="input-row">
             <input value={vmPath} placeholder="/sdcard/8bp.apk" onChange={e => setVmPath(e.target.value)} />
@@ -260,6 +273,9 @@ export default function Settings({
             </button>
           </div>
           <div className="meta-line">Diff result: {probeResult?.state || 'none'} · changes={probeResult?.totalChanges ?? 0}</div>
+          <label className="field-label">Export probe JSON (send to developer)</label>
+          <textarea className="probe-export" readOnly value={probeResult ? JSON.stringify(probeResult, null, 2) : 'Run Capture A, Capture B, then Diff to generate a report.'} />
+          <button className="btn primary wide" disabled={!probeResult} onClick={copyProbe}>{probeCopied ? 'COPIED ✓' : 'COPY PROBE JSON'}</button>
           <div className="meta-line">Last: {vmMsg || 'idle'}</div>
         </section>
 

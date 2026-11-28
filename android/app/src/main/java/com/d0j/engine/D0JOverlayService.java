@@ -64,6 +64,9 @@ public class D0JOverlayService extends Service {
     private LinearLayout toastView;
     private WindowManager.LayoutParams buttonParams;
     private WindowManager.LayoutParams menuParams;
+    private LinearLayout menuContent;
+    private String menuTab = "status";
+    private final java.util.HashMap<String, Button> menuTabButtons = new java.util.HashMap<>();
     private WindowManager.LayoutParams toastParams;
     private View lineView;
     private WindowManager.LayoutParams lineParams;
@@ -82,6 +85,13 @@ public class D0JOverlayService extends Service {
             }
             if (gameExited()) {
                 gameExitTicks += 1;
+                // Hide the menu on the first positive evidence tick so the UI
+                // never lingers after the game is gone. Full teardown waits for
+                // a second confirmation.
+                if (gameExitTicks == 1) {
+                    removeMenu();
+                    removeToast();
+                }
                 if (gameExitTicks >= 2) {
                     stopSessionInternal("GAME_EXITED");
                     return;
@@ -89,7 +99,7 @@ public class D0JOverlayService extends Service {
             } else {
                 gameExitTicks = 0;
             }
-            main.postDelayed(this, 4000);
+            main.postDelayed(this, 2000);
         }
     };
 
@@ -157,7 +167,7 @@ public class D0JOverlayService extends Service {
         active = true;
         gameExitTicks = 0;
         main.removeCallbacks(sessionWatchdog);
-        main.postDelayed(sessionWatchdog, 4000);
+        main.postDelayed(sessionWatchdog, 2000);
 
         boolean launchGame = intent != null && intent.getBooleanExtra("launchGame", false);
         if (launchGame) launchPackage(sessionPackage);
@@ -309,124 +319,133 @@ public class D0JOverlayService extends Service {
     private void showMenu() {
         if (menuView != null) return;
         DisplayMetrics dm = getResources().getDisplayMetrics();
-        int width = Math.min(dm.widthPixels - dp(20), dp(430));
+        int width = Math.min(dm.widthPixels - dp(16), dp(560));
+        int height = Math.min(dm.heightPixels - dp(96), dp(640));
+
+        GradientDrawable shellBg = new GradientDrawable();
+        shellBg.setColor(Color.parseColor("#111111"));
+        shellBg.setCornerRadius(dp(24));
+        shellBg.setStroke(dp(1), Color.parseColor("#303030"));
 
         LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#111111"));
-        bg.setCornerRadius(dp(20));
-        bg.setStroke(dp(1), Color.parseColor("#3A3A3A"));
-        root.setBackground(bg);
-        root.setPadding(dp(12), dp(10), dp(12), dp(12));
+        root.setOrientation(LinearLayout.HORIZONTAL);
+        root.setBackground(shellBg);
+        root.setPadding(dp(8), dp(8), dp(8), dp(8));
+
+        LinearLayout main = new LinearLayout(this);
+        main.setOrientation(LinearLayout.VERTICAL);
+        main.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f));
+
+        LinearLayout side = new LinearLayout(this);
+        side.setOrientation(LinearLayout.VERTICAL);
+        side.setGravity(Gravity.CENTER_HORIZONTAL);
+        side.setPadding(dp(6), dp(8), dp(6), dp(8));
+        side.setLayoutParams(new LinearLayout.LayoutParams(dp(72), LinearLayout.LayoutParams.MATCH_PARENT));
+        GradientDrawable sideBg = new GradientDrawable();
+        sideBg.setColor(Color.parseColor("#151515"));
+        sideBg.setCornerRadius(dp(20));
+        sideBg.setStroke(dp(1), Color.parseColor("#303030"));
+        side.setBackground(sideBg);
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = new TextView(this);
-        title.setText("D0J MOD MENU");
-        title.setTextColor(Color.WHITE);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-        header.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        Button hide = smallBtn("Hide");
-        hide.setOnClickListener(v -> removeMenu());
-        header.addView(hide);
-        root.addView(header);
+        header.setPadding(dp(6), dp(4), dp(6), dp(8));
+        TextView logo = new TextView(this);
+        logo.setText("D0J");
+        logo.setGravity(Gravity.CENTER);
+        logo.setTextColor(Color.BLACK);
+        logo.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        logo.setTypeface(Typeface.DEFAULT_BOLD);
+        GradientDrawable logoBg = new GradientDrawable();
+        logoBg.setColor(Color.WHITE);
+        logoBg.setCornerRadius(dp(14));
+        logo.setBackground(logoBg);
+        header.addView(logo, new LinearLayout.LayoutParams(dp(44), dp(44)));
 
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.setPadding(dp(10), 0, 0, 0);
+        TextView title = new TextView(this);
+        title.setText("D0J ENGINE");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        copy.addView(title);
         TextView sub = new TextView(this);
-        sub.setText(statusText + " · drag header");
-        sub.setTextColor(Color.parseColor("#BDBDBD"));
-        sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        sub.setPadding(0, dp(2), 0, dp(8));
-        root.addView(sub);
+        sub.setText("8 Ball Pool · v56.34.0 · session");
+        sub.setTextColor(Color.parseColor("#A8A8A8"));
+        sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10);
+        copy.addView(sub);
+        header.addView(copy, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView pill = new TextView(this);
+        pill.setText(findingShot() ? "Finding shot..." : statusText);
+        pill.setTextColor(Color.WHITE);
+        pill.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        pill.setPadding(dp(10), dp(6), dp(10), dp(6));
+        GradientDrawable pillBg = new GradientDrawable();
+        pillBg.setColor(Color.parseColor("#1B1B1B"));
+        pillBg.setCornerRadius(dp(14));
+        pillBg.setStroke(dp(1), Color.parseColor("#303030"));
+        pill.setBackground(pillBg);
+        header.addView(pill, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        main.addView(header);
 
         ScrollView scroll = new ScrollView(this);
-        LinearLayout content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(content);
-        root.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Math.min(dm.heightPixels - dp(180), dp(560))));
+        menuContent = new LinearLayout(this);
+        menuContent.setOrientation(LinearLayout.VERTICAL);
+        menuContent.setPadding(0, dp(4), 0, dp(8));
+        scroll.addView(menuContent);
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        main.addView(scroll);
 
-        // Status
-        content.addView(section("Status / Test"));
-        content.addView(infoText("Session: " + (active ? "ACTIVE" : "IDLE")));
-        content.addView(infoText("Target: " + sessionPackage));
-        content.addView(actionRow("Run Quick Test", v -> D0JNativePlugin.notifyMenuCommand("runTest")));
-        content.addView(actionRow("Open App", v -> openApp()));
-        content.addView(actionRow("Launch 8BP", v -> D0JNativePlugin.notifyMenuCommand("launch8bp")));
-        content.addView(actionRow("Stop Session", v -> { D0JNativePlugin.notifyMenuCommand("stop"); stopSessionInternal(); }));
+        root.addView(main);
+        root.addView(side);
 
-        // VM host substrate (no framework hook attached in this build)
-        content.addView(section("VM Host (rootless)"));
-        content.addView(infoText("Hook status is reported, never assumed."));
-        content.addView(actionRow("Session Guard Check", v -> D0JNativePlugin.notifyMenuCommand("sessionGuard")));
-        content.addView(actionRow("VM Host Status", v -> D0JNativePlugin.notifyMenuCommand("vmStatus")));
-        content.addView(actionRow("VM Hook Status", v -> D0JNativePlugin.notifyMenuCommand("vmHooks")));
-        content.addView(actionRow("Attach VM Hooks", v -> D0JNativePlugin.notifyMenuCommand("vmAttach")));
-        content.addView(actionRow("Start VM Host", v -> D0JNativePlugin.notifyMenuCommand("vmStart")));
-        content.addView(actionRow("Run Lines From State", v -> D0JNativePlugin.notifyMenuCommand("runLiveLines")));
+        TextView app = new TextView(this);
+        app.setText("8BP");
+        app.setGravity(Gravity.CENTER);
+        app.setTextColor(Color.BLACK);
+        app.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        app.setTypeface(Typeface.DEFAULT_BOLD);
+        GradientDrawable appBg = new GradientDrawable();
+        appBg.setColor(Color.WHITE);
+        appBg.setCornerRadius(dp(16));
+        app.setBackground(appBg);
+        side.addView(app, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        side.addView(divider());
 
-        // Lines
-        content.addView(section("Lines / Prediction"));
-        addToggle(content, "Show lines", "showLines", true);
-        addToggle(content, "Keep lines after shot", "keepLines", true);
-        addToggle(content, "Power lock", "powerLock", false);
-        addSeek(content, "Default power", "power", 0, 100, 74, "%");
-        addToggle(content, "Show pockets", "showPockets", true);
-        addSeek(content, "Spin", "lineSpin", -100, 100, 0, "");
-        addSeek(content, "Line opacity", "lineOpacity", 10, 100, 85, "%");
-        addSeek(content, "Guide opacity", "guideOpacity", 10, 100, 70, "%");
-        content.addView(actionRow("Run All Prediction Lines", v -> D0JNativePlugin.notifyMenuCommand("runLineTest")));
-        content.addView(actionRow("Start Live Overlay Lines", v -> D0JNativePlugin.notifyMenuCommand("liveStart")));
-        content.addView(actionRow("Stop Live Overlay Lines", v -> D0JNativePlugin.notifyMenuCommand("liveStop")));
-        content.addView(actionRow("Open Line Prediction Test", v -> D0JNativePlugin.notifyMenuCommand("openTable")));
+        menuTabButtons.clear();
+        String[][] tabs = {
+                { "status", "O", "Status" },
+                { "lines", "/", "Lines" },
+                { "autoplay", ">", "Auto" },
+                { "queue", "=", "Queue" },
+                { "eightball", "8", "8 Ball" },
+                { "settings", "#", "Settings" }
+        };
+        for (String[] item : tabs) {
+            Button tab = smallBtn(item[1]);
+            tab.setContentDescription(item[2]);
+            final String id = item[0];
+            tab.setOnClickListener(v -> {
+                menuTab = id;
+                D0JPrefs.setString(D0JOverlayService.this, "menu_tab", id);
+                renderMenuTab(id);
+            });
+            menuTabButtons.put(id, tab);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(52), dp(52));
+            lp.bottomMargin = dp(6);
+            side.addView(tab, lp);
+        }
+        side.addView(divider());
+        Button close = smallBtn("X");
+        close.setContentDescription("Close menu");
+        close.setOnClickListener(v -> removeMenu());
+        side.addView(close, new LinearLayout.LayoutParams(dp(52), dp(52)));
 
-        // Auto play
-        content.addView(section("Auto Play"));
-        addToggle(content, "Enable auto play", "autoPlay", false);
-        addChoice(content, "Auto play mode", "autoPlayMode", new String[]{"Pro Fast","Pro Player","Fast Mode"});
-        addToggle(content, "Failed break", "failedBreak", false);
-        content.addView(actionRow("Run Ratimoda", v -> D0JNativePlugin.notifyMenuCommand("autoplay")));
-        content.addView(actionRow("Attach Live Input", v -> D0JNativePlugin.notifyMenuCommand("inputAttach")));
-        content.addView(actionRow("Start Live Auto", v -> D0JNativePlugin.notifyMenuCommand("autoLiveStart")));
-        content.addView(actionRow("Stop Live Auto", v -> D0JNativePlugin.notifyMenuCommand("autoLiveStop")));
-
-        // Auto queue
-        content.addView(section("Auto Queue"));
-        addToggle(content, "Auto queue", "autoQueue", false);
-        addChoice(content, "Queue mode", "queueMode", new String[]{"ONE","SESSION","INFINITE"});
-        addSeek(content, "Match limit", "matchLimit", 1, 20, 3, "");
-        addSeek(content, "Delay", "queueDelay", 1, 10, 2, "s");
-        addSeek(content, "Jitter", "jitter", 0, 20, 4, "x0.1s");
-        addSeek(content, "Retries", "retries", 0, 5, 2, "");
-        addToggle(content, "Stop on manual input", "stopOnManual", true);
-        addChoice(content, "Queue table (coins)", "queueTable", new String[]{"London","Moscow","Beijing","Barcelona"});
-
-        // 8 ball
-        content.addView(section("8 Ball / Golden Shot"));
-        addToggle(content, "Prioritize 9th ball", "prioritize9", false);
-        addToggle(content, "Paralysis opponent turn", "paralysisOpponent", false);
-        addToggle(content, "Clean up shot", "cleanUpShot", false);
-        addChoice(content, "Golden shot target", "goldenTarget", new String[]{"1","2","3","4"});
-
-        content.addView(section("Session"));
-        addToggle(content, "Auto-stop when 8BP closes", "autoStopOnGameExit", false);
-        content.addView(infoText("Auto-stop needs Usage access permission (optional)."));
-        content.addView(section("Notes"));
-        content.addView(infoText("A1: no accessibility / no auto-back."));
-        content.addView(infoText("Real 8BP live lines need game bridge/patch. Demo/table prediction works locally."));
-
-        int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                : WindowManager.LayoutParams.TYPE_PHONE;
-        menuParams = new WindowManager.LayoutParams(width, WindowManager.LayoutParams.WRAP_CONTENT, type,
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                PixelFormat.TRANSLUCENT);
-        menuParams.gravity = Gravity.TOP | Gravity.START;
-        menuParams.x = D0JPrefs.getInt(this, D0JPrefs.FLOAT_X, dp(10));
-        menuParams.y = Math.max(dp(40), D0JPrefs.getInt(this, D0JPrefs.FLOAT_Y, dp(90)));
-
-        header.setOnTouchListener(new View.OnTouchListener() {
+        View.OnTouchListener drag = new View.OnTouchListener() {
             float dx, dy; int sx, sy;
             @Override public boolean onTouch(View v, MotionEvent e) {
                 if (menuParams == null || menuView == null) return false;
@@ -436,19 +455,166 @@ public class D0JOverlayService extends Service {
                     case MotionEvent.ACTION_MOVE:
                         menuParams.x = Math.max(0, sx + (int)(e.getRawX() - dx));
                         menuParams.y = Math.max(0, sy + (int)(e.getRawY() - dy));
-                        try { windowManager.updateViewLayout(menuView, menuParams); } catch (Exception ignored) {}
+                        try { windowManager.updateViewLayout(menuView, menuParams); } catch (Exception ignored) { }
                         return true;
                     case MotionEvent.ACTION_UP:
                         D0JPrefs.setInt(D0JOverlayService.this, D0JPrefs.FLOAT_X, menuParams.x);
-                        D0JPrefs.setInt(D0JOverlayService.this, D0JPrefs.FLOAT_Y, menuParams.y);
+                        D0JPrefs.setInt(D0JPrefs.FLOAT_Y, menuParams.y);
                         return true;
                 }
                 return false;
             }
-        });
+        };
+        // Drag only from the header: consuming touches on the side rail would
+        // swallow tab and close-button clicks.
+        header.setOnTouchListener(drag);
+
+        menuTab = D0JPrefs.getString(this, "menu_tab", "status");
+        if (!menuTabButtons.containsKey(menuTab)) menuTab = "status";
+        renderMenuTab(menuTab);
+
+        int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : WindowManager.LayoutParams.TYPE_PHONE;
+        menuParams = new WindowManager.LayoutParams(width, height, type,
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT);
+        menuParams.gravity = Gravity.TOP | Gravity.START;
+        menuParams.x = D0JPrefs.getInt(this, D0JPrefs.FLOAT_X, dp(10));
+        menuParams.y = Math.max(dp(40), D0JPrefs.getInt(this, D0JPrefs.FLOAT_Y, dp(90)));
 
         menuView = root;
-        try { windowManager.addView(menuView, menuParams); } catch (Exception ignored) { menuView = null; menuWebView = null; }
+        try { windowManager.addView(menuView, menuParams); } catch (Exception ignored) { menuView = null; }
+    }
+
+    private boolean findingShot() {
+        String value = String.valueOf(statusState).toLowerCase();
+        return value.contains("test") || value.contains("find");
+    }
+
+    private View divider() {
+        View view = new View(this);
+        view.setBackgroundColor(Color.parseColor("#333333"));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(34), dp(1));
+        lp.topMargin = dp(8);
+        lp.bottomMargin = dp(8);
+        view.setLayoutParams(lp);
+        return view;
+    }
+
+    private void styleMenuTabs(String active) {
+        for (java.util.Map.Entry<String, Button> entry : menuTabButtons.entrySet()) {
+            boolean on = entry.getKey().equals(active);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setColor(Color.parseColor(on ? "#FFFFFF" : "#1B1B1B"));
+            bg.setCornerRadius(dp(16));
+            bg.setStroke(dp(1), Color.parseColor(on ? "#FFFFFF" : "#303030"));
+            entry.getValue().setBackground(bg);
+            entry.getValue().setTextColor(on ? Color.BLACK : Color.WHITE);
+        }
+    }
+
+    private void renderMenuTab(String id) {
+        if (menuContent == null) return;
+        menuContent.removeAllViews();
+        styleMenuTabs(id);
+
+        if ("status".equals(id)) {
+            menuContent.addView(section("Session"));
+            menuContent.addView(infoText("Client: " + statusText));
+            menuContent.addView(infoText("Target: " + sessionPackage));
+            menuContent.addView(infoText("Overlay: active · session-scoped"));
+            try {
+                org.json.JSONObject hooks = com.d0j.engine.vm.VMHookInstaller.report();
+                menuContent.addView(infoText("Hooks: " + hooks.optString("state", "PENDING")
+                        + " · redirect=" + hooks.optString("redirect", "UNAVAILABLE")));
+            } catch (Exception ignored) { }
+            menuContent.addView(section("Quick Actions"));
+            menuContent.addView(actionRow("Run Quick Test", v -> D0JNativePlugin.notifyMenuCommand("runTest")));
+            menuContent.addView(actionRow("Open App / Export Probe", v -> D0JNativePlugin.notifyMenuCommand("openMenu")));
+            menuContent.addView(actionRow("Launch 8BP", v -> D0JNativePlugin.notifyMenuCommand("launch8bp")));
+            menuContent.addView(actionRow("Stop Session", v -> { D0JNativePlugin.notifyMenuCommand("stop"); stopSessionInternal(); }));
+            menuContent.addView(section("VM Host"));
+            menuContent.addView(actionRow("VM Host Status", v -> D0JNativePlugin.notifyMenuCommand("vmStatus")));
+            menuContent.addView(actionRow("Start VM Host", v -> D0JNativePlugin.notifyMenuCommand("vmStart")));
+            menuContent.addView(actionRow("VM Hook Status", v -> D0JNativePlugin.notifyMenuCommand("vmHooks")));
+            menuContent.addView(actionRow("Attach VM Hooks", v -> D0JNativePlugin.notifyMenuCommand("vmAttach")));
+            menuContent.addView(actionRow("Session Guard Check", v -> D0JNativePlugin.notifyMenuCommand("sessionGuard")));
+            menuContent.addView(infoText("Quick test never blocks launch. Hook detail appears as a temp notification and in Settings."));
+            return;
+        }
+
+        if ("lines".equals(id)) {
+            menuContent.addView(section("Line Prediction"));
+            addToggle(menuContent, "Show lines", "showLines", true);
+            addToggle(menuContent, "Keep lines after shot", "keepLines", true);
+            addToggle(menuContent, "Power lock", "powerLock", false);
+            addSeek(menuContent, "Default power", "power", 0, 100, 74, "%");
+            addToggle(menuContent, "Show pockets", "showPockets", true);
+            addSeek(menuContent, "Spin", "lineSpin", -100, 100, 0, "");
+            addSeek(menuContent, "Line opacity", "lineOpacity", 10, 100, 85, "%");
+            addSeek(menuContent, "Guide opacity", "guideOpacity", 10, 100, 70, "%");
+            menuContent.addView(actionRow("Run All Prediction Lines", v -> D0JNativePlugin.notifyMenuCommand("runLineTest")));
+            menuContent.addView(actionRow("Run Lines From State", v -> D0JNativePlugin.notifyMenuCommand("runLiveLines")));
+            menuContent.addView(actionRow("Start Live Overlay Lines", v -> D0JNativePlugin.notifyMenuCommand("liveStart")));
+            menuContent.addView(actionRow("Stop Live Overlay Lines", v -> D0JNativePlugin.notifyMenuCommand("liveStop")));
+            menuContent.addView(actionRow("Open Line Prediction Test", v -> D0JNativePlugin.notifyMenuCommand("openTable")));
+            menuContent.addView(infoText("Live lines stay simulated until real state is measured on your device."));
+            return;
+        }
+
+        if ("autoplay".equals(id)) {
+            menuContent.addView(section("Auto Play"));
+            addToggle(menuContent, "Enable auto play", "autoPlay", false);
+            addChoice(menuContent, "Auto play mode", "autoPlayMode", new String[]{"Pro Fast","Pro Player","Fast Mode"});
+            addToggle(menuContent, "Failed break", "failedBreak", false);
+            menuContent.addView(actionRow("Run Ratimoda", v -> D0JNativePlugin.notifyMenuCommand("autoplay")));
+            menuContent.addView(actionRow("Attach Live Input", v -> D0JNativePlugin.notifyMenuCommand("inputAttach")));
+            menuContent.addView(actionRow("Start Live Auto", v -> D0JNativePlugin.notifyMenuCommand("autoLiveStart")));
+            menuContent.addView(actionRow("Stop Live Auto", v -> D0JNativePlugin.notifyMenuCommand("autoLiveStop")));
+            menuContent.addView(infoText("Finding-shot indicator and temp notifications are enabled by default."));
+            return;
+        }
+
+        if ("queue".equals(id)) {
+            menuContent.addView(section("Auto Queue"));
+            addToggle(menuContent, "Auto queue", "autoQueue", false);
+            addChoice(menuContent, "Queue mode", "queueMode", new String[]{"ONE","SESSION","INFINITE"});
+            addSeek(menuContent, "Match limit", "matchLimit", 1, 20, 3, "");
+            addSeek(menuContent, "Delay", "queueDelay", 1, 10, 2, "s");
+            addSeek(menuContent, "Jitter", "jitter", 0, 20, 4, "x0.1s");
+            addSeek(menuContent, "Retries", "retries", 0, 5, 2, "");
+            addToggle(menuContent, "Stop on manual input", "stopOnManual", true);
+            addChoice(menuContent, "Queue table (coins)", "queueTable", new String[]{"London","Moscow","Beijing","Barcelona"});
+            return;
+        }
+
+        if ("eightball".equals(id)) {
+            menuContent.addView(section("8 Ball Play"));
+            addToggle(menuContent, "Prioritize 9th ball", "prioritize9", false);
+            addToggle(menuContent, "Paralysis opponent turn", "paralysisOpponent", false);
+            addToggle(menuContent, "Clean up shot", "cleanUpShot", false);
+            menuContent.addView(section("Golden Shot"));
+            addChoice(menuContent, "Golden shot target", "goldenTarget", new String[]{"1","2","3","4"});
+            menuContent.addView(infoText("Golden target: center [1] to last ring [4]."));
+            return;
+        }
+
+        menuContent.addView(section("Session"));
+        addToggle(menuContent, "Auto-stop when 8BP closes", "autoStopOnGameExit", false);
+        menuContent.addView(infoText("Auto-stop needs Usage access permission (optional)."));
+        menuContent.addView(section("Live Feedback"));
+        addToggle(menuContent, "Persistent notification", "notificationsEnabled", true);
+        addToggle(menuContent, "Temp cheat notifications", "tempNotifications", true);
+        addToggle(menuContent, "Run quick test on launch", "runTestOnLaunch", true);
+        menuContent.addView(actionRow("Notification Permission", v -> D0JNativePlugin.notifyMenuCommand("requestNotifications")));
+        menuContent.addView(actionRow("Usage Access", v -> D0JNativePlugin.notifyMenuCommand("requestUsage")));
+        menuContent.addView(section("Device Setup"));
+        menuContent.addView(actionRow("Open App / Export Probe", v -> D0JNativePlugin.notifyMenuCommand("openMenu")));
+        menuContent.addView(infoText("Copy probe JSON in Settings after Capture A, Capture B and Diff."));
+        menuContent.addView(section("Notes"));
+        menuContent.addView(infoText("A1: no accessibility / no auto-back."));
+        menuContent.addView(infoText("Real 8BP live lines need measured state and an attached hosted activity."));
     }
 
     private TextView section(String text) {
@@ -802,6 +968,8 @@ public class D0JOverlayService extends Service {
             menuView = null;
             menuWebView = null;
         }
+        menuContent = null;
+        menuTabButtons.clear();
     }
 
     private void removeFloat() {

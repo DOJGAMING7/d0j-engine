@@ -39,6 +39,7 @@ function Main() {
   const [autoLiveInfo, setAutoLiveInfo] = useState(null)
   const [nativeStatus, setNativeStatus] = useState({ overlay: false, floating: false, native: native.isNative(), sessionActive: false })
   const [menuSignal, setMenuSignal] = useState(0)
+  const [menuCloseSignal, setMenuCloseSignal] = useState(0)
   const [toast, setToast] = useState('')
   const [toastKind, setToastKind] = useState('info')
   const [sessionStatus, setSessionStatus] = useState({ state: 'idle', text: 'Ready' })
@@ -103,15 +104,18 @@ function Main() {
 
   const runQuickTest = async (reason = 'manual') => {
     const items = []
-    const add = (name, ok, detail) => items.push({ name, ok: !!ok, detail: String(detail || '') })
+    // Core checks must pass. Device gates are informational: they depend on
+    // permissions or hardware that the user grants after the app opens.
+    const add = (name, ok, detail, group = 'core') =>
+      items.push({ name, ok: !!ok, detail: String(detail || ''), group })
     pushStatus('testing', 'Running quick test...')
     try {
       const ping = await native.ping()
       add('Native bridge', ping?.ok !== false || !native.isNative(), native.isNative() ? (ping?.ok ? 'pong' : 'unavailable') : 'web mode')
       const overlay = await native.hasOverlayPermission()
-      add('Overlay permission', overlay?.granted === true || !native.isNative(), overlay?.granted ? 'granted' : 'not granted')
+      add('Overlay permission', overlay?.granted === true || !native.isNative(), overlay?.granted ? 'granted' : 'pending until granted', 'device')
       const notif = await native.hasNotificationPermission()
-      add('Notification permission', notif?.granted === true || !native.isNative(), notif?.granted ? 'granted' : 'not granted')
+      add('Notification permission', notif?.granted === true || !native.isNative(), notif?.granted ? 'granted' : 'pending until granted', 'device')
       const session = await native.getSessionStatus()
       add('Session service', true, session?.active ? 'active' : 'ready')
       const table = bridge.getTable ? bridge.getTable() : (liveState.table || createDefaultTable())
@@ -126,13 +130,23 @@ function Main() {
         add('Prediction script', typeof src2 === 'string' && src2.includes('predict'), `len ${src2?.length || 0}`)
       } catch (e) { add('Prediction script', false, e?.message || e) }
       add('Config', !!config && typeof config.power === 'number', `power ${config?.power}`)
+      try {
+        const hooks = await native.vmHooks()
+        add('VM hooks', hooks?.ready === true, `${hooks?.state || 'PENDING'} · inst=${hooks?.instrumentation || '—'} am=${hooks?.activityManager || '—'} pm=${hooks?.packageManager || '—'}${hooks?.reason ? ` · ${hooks.reason}` : ''}`, 'device')
+      } catch (e) { add('VM hooks', false, e?.message || e, 'device') }
     } catch (e) {
       add('Quick test', false, e?.message || e)
     }
-    const ok = items.every(i => i.ok)
-    const report = { at: Date.now(), ok, reason, items }
+    const core = items.filter(i => i.group !== 'device')
+    const gates = items.filter(i => i.group === 'device')
+    const ok = core.every(i => i.ok)
+    const failed = core.filter(i => !i.ok).map(i => i.name)
+    const report = { at: Date.now(), ok, reason, items, core, gates, failed }
     setTestReport(report)
-    const summary = `Quick test ${ok ? 'PASS' : 'FAIL'} · ${items.filter(i => i.ok).length}/${items.length}`
+    const coreText = `${core.filter(i => i.ok).length}/${core.length}`
+    const summary = ok
+      ? `Quick test PASS · core ${coreText} · device gates ${gates.filter(i => i.ok).length}/${gates.length}`
+      : `Quick test FAIL · core ${coreText} · failed: ${failed.join(', ')}`
     say(summary, ok ? 'ready' : 'error', ok ? 'pass' : 'fail')
     if (config.tempNotifications !== false) {
       native.showToast({ text: summary, kind: ok ? 'pass' : 'fail' }).catch(() => {})
@@ -436,7 +450,6 @@ function Main() {
   const startSession = async (packageName = GAME_PACKAGES.eightBallPool) => {
     const pkg = String(packageName || GAME_PACKAGES.eightBallPool)
     const game = SUPPORTED_GAMES.find(g => g.packageName === pkg)
-    if (config.runTestOnLaunch) runQuickTest('launch').catch(() => {})
     pushStatus('starting', `Starting ${game?.name || 'game'} session...`)
     if (native.isNative()) {
       const notif = await native.hasNotificationPermission().catch(() => ({ granted: true }))
@@ -456,6 +469,7 @@ function Main() {
       setConfigState(prev => ({ ...prev, sessionActive: true }))
       say(`Session active · ${game?.name || pkg}`, 'running')
       await refreshNativeStatus()
+      if (config.runTestOnLaunch) runQuickTest('launch').catch(() => {})
       return res
     }
     // Fallback: launch without overlay session
@@ -552,7 +566,7 @@ function Main() {
 
   const reportVmHooks = async () => {
     const res = await native.vmHooks()
-    say(`VM HOOKS: ${res?.state || 'PENDING'} · inst=${res?.instrumentation || '—'} am=${res?.activityManager || '—'} pm=${res?.packageManager || '—'}`, res?.ready ? 'ready' : 'error')
+    say(`VM HOOKS: ${res?.state || 'PENDING'} · redirect=${res?.redirect || 'UNAVAILABLE'} · inst=${res?.instrumentation || '—'} am=${res?.activityManager || '—'} pm=${res?.packageManager || '—'} · ${res?.reason || ''}`, res?.ready ? 'ready' : 'error')
     return res
   }
 
@@ -575,11 +589,13 @@ function Main() {
     else if (command === 'vmStart') handlers.startVmHost?.()
     else if (command === 'vmAttach') handlers.attachVmHooks?.()
     else if (command === 'vmHooks') handlers.reportVmHooks?.()
+    else if (command === 'requestNotifications') handlers.requestNotifications?.()
+    else if (command === 'requestUsage') handlers.requestUsage?.()
     else if (command === 'openMenu') { setTab('home'); setMenuSignal(n => n + 1); native.openApp() }
     else if (command === 'openTable') { setTab('table'); native.openApp() }
   }
 
-  handlersRef.current = { handlePlay, startSession, runRatimoda, runLineTest, runLiveLines, startLiveOverlay, stopLiveOverlay, startLiveAuto, stopLiveAuto, attachInput, handleStop, runQuickTest, reportSessionGuard, reportVmStatus, startVmHost, attachVmHooks, reportVmHooks }
+  handlersRef.current = { handlePlay, startSession, runRatimoda, runLineTest, runLiveLines, startLiveOverlay, stopLiveOverlay, startLiveAuto, stopLiveAuto, attachInput, handleStop, runQuickTest, reportSessionGuard, reportVmStatus, startVmHost, attachVmHooks, reportVmHooks, requestNotifications, requestUsage }
 
   useEffect(() => {
     const stored = getPref('config', {})
@@ -633,9 +649,11 @@ function Main() {
       handles.push(await native.addListener('sessionEnded', data => {
         setSessionStatus({ state: 'stopped', text: 'Session stopped' })
         setGuardInfo(prev => ({ ...(prev || {}), verdict: 'SESSION_ENDED', reason: data?.reason || 'closed' }))
+        setMenuCloseSignal(n => n + 1)
         handlersRef.current.stopLiveAuto?.()
         handlersRef.current.stopLiveOverlay?.()
         say(`SESSION ENDED: ${data?.reason || 'closed'}`, 'stopped')
+        if (overlayMode) window.close?.()
       }))
       handles.push(await native.addListener('configChanged', patch => {
         if (!patch || typeof patch !== 'object') return
@@ -714,6 +732,7 @@ function Main() {
       sessionStatus={sessionStatus}
       testReport={testReport}
       menuSignal={menuSignal}
+      menuCloseSignal={menuCloseSignal}
       onOpenSettings={() => setTab('settings')}
       onRunScript={runRatimoda}
       runningScript={runningScript}
