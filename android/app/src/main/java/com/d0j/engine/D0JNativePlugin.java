@@ -241,6 +241,27 @@ public class D0JNativePlugin extends Plugin {
         call.resolve(res);
     }
 
+    @PluginMethod
+    public void showToast(PluginCall call) {
+        String text = call.getString("text", "");
+        String kind = call.getString("kind", "info");
+        if (text == null || text.trim().isEmpty()) {
+            call.reject("NO_TEXT");
+            return;
+        }
+        try {
+            Intent intent = new Intent(getContext(), D0JOverlayService.class);
+            intent.setAction(D0JOverlayService.ACTION_SHOW_TOAST);
+            intent.putExtra("text", text);
+            intent.putExtra("kind", kind);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) getContext().startForegroundService(intent);
+            else getContext().startService(intent);
+        } catch (Exception ignored) {}
+        JSObject res = new JSObject();
+        res.put("ok", true);
+        call.resolve(res);
+    }
+
     private static boolean canOverlay(Context context) {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context);
     }

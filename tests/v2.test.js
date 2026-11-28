@@ -47,12 +47,14 @@ test('mod menu keeps core cheats and clean session labels', () => {
     'Pro Fast', 'Pro Player', 'Fast Mode', 'Failed break',
     'Prioritize 9th ball', 'Paralysis opponent turn', 'Clean up shot',
     'Golden shot target',
+    'D0J Auto Queue', 'ONE', 'SESSION', 'INFINITE',
+    'Match limit', 'Delay', 'Jitter', 'Retries', 'Stop on manual input',
+    'Auto Queue With Coins / Table',
     'LAUNCH 8BP', 'RUN TEST', 'STOP'
   ]
   for (const label of required) {
     assert.ok(source.includes(label), `missing mod menu label: ${label}`)
   }
-  assert.ok(!source.includes('D0J AUTO QUEUE'), 'auto queue UI should be removed')
   assert.ok(!source.includes('Purchase guard'), 'purchase guard UI should be removed')
 })
 

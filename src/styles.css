@@ -463,3 +463,33 @@ details { margin-top: 10px; color: var(--muted); font-size: 10px; }
   .mm-header { flex-direction: column; align-items: stretch; }
   .mm-status { justify-content: center; }
 }
+
+/* v2.1.1 fixes: left sidebar, movable menu, queue/counters, in-game toast */
+.mm-backdrop.mm-floating { background: transparent; pointer-events: none; }
+.mm-backdrop.mm-floating .mm-shell { pointer-events: auto; max-height: calc(100vh - 20px); }
+.mm-shell.mm-left { flex-direction: row; }
+.mm-shell.mm-left .mm-side { order: 0; }
+.mm-shell.mm-left .mm-main { order: 1; }
+.mm-header { cursor: grab; user-select: none; touch-action: none; }
+.mm-header:active { cursor: grabbing; }
+.mm-side { cursor: grab; touch-action: none; }
+.mm-tabs, .mm-close, .mm-tab { touch-action: manipulation; cursor: pointer; }
+.mm-counters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.mm-counter { background: #171717; border: 1px solid #303030; border-radius: 12px; padding: 10px 6px; text-align: center; }
+.mm-counter small { display: block; color: #a8a8a8; font-size: 10px; letter-spacing: .04em; }
+.mm-counter b { display: block; color: #fff; font-size: 18px; margin-top: 4px; }
+.mm-shell { width: min(920px, calc(100vw - 20px)); }
+
+.ingame-toast-stack {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 120; display: flex; flex-direction: column; gap: 8px; width: min(92vw, 420px);
+  pointer-events: none;
+}
+.ingame-toast {
+  background: rgba(16,16,16,.96); color: #fff; border: 1px solid #3a3a3a;
+  border-radius: 14px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  font-size: 12px; line-height: 1.35;
+}
+.ingame-toast b { display: block; font-size: 11px; color: #fff; margin-bottom: 2px; letter-spacing: .03em; }
+.ingame-toast.pass { border-color: #6f6; }
+.ingame-toast.fail { border-color: #f66; }

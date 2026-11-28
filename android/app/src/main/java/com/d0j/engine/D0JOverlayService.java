@@ -39,6 +39,7 @@ public class D0JOverlayService extends Service {
     public static final String ACTION_UPDATE_STATUS = "com.d0j.engine.action.UPDATE_STATUS";
     public static final String ACTION_OPEN_MENU = "com.d0j.engine.action.OPEN_MENU";
     public static final String ACTION_OPEN_APP = "com.d0j.engine.action.OPEN_APP";
+    public static final String ACTION_SHOW_TOAST = "com.d0j.engine.action.SHOW_TOAST";
 
     private static final String CHANNEL_ID = "d0j_session";
     private static final int NOTIFICATION_ID = 7701;
@@ -47,14 +48,16 @@ public class D0JOverlayService extends Service {
     private final Handler main = new Handler(Looper.getMainLooper());
     private WindowManager windowManager;
     private View floatButton;
-    private LinearLayout panelView;
+    private View menuView;
+    private android.webkit.WebView menuWebView;
+    private LinearLayout toastView;
     private WindowManager.LayoutParams buttonParams;
-    private WindowManager.LayoutParams panelParams;
+    private WindowManager.LayoutParams menuParams;
+    private WindowManager.LayoutParams toastParams;
     private String sessionPackage = "com.miniclip.eightballpool";
     private String statusText = "Session active";
     private String statusState = "running";
-    private TextView statusLabel;
-    private TextView statusDot;
+    private final Runnable hideToastRunnable = this::removeToast;
     private final Runnable sessionWatchdog = new Runnable() {
         @Override public void run() {
             if (!active) return;
@@ -91,10 +94,14 @@ public class D0JOverlayService extends Service {
                 return START_STICKY;
             case ACTION_OPEN_MENU:
                 if (!active) startSessionInternal(intent);
-                showPanel();
+                showMenu();
                 return START_STICKY;
             case ACTION_OPEN_APP:
                 openApp();
+                return START_STICKY;
+            case ACTION_SHOW_TOAST:
+                if (!active) startSessionInternal(intent);
+                showToast(intent == null ? "" : intent.getStringExtra("text"), intent == null ? "info" : intent.getStringExtra("kind"));
                 return START_STICKY;
             case ACTION_START_SESSION:
             default:
@@ -117,7 +124,6 @@ public class D0JOverlayService extends Service {
         startForegroundCompat();
         if (floatButton == null) createFloatButton();
         active = true;
-        updateStatusUi();
         main.removeCallbacks(sessionWatchdog);
         main.postDelayed(sessionWatchdog, 4000);
 
@@ -135,7 +141,7 @@ public class D0JOverlayService extends Service {
         D0JPrefs.setString(this, D0JPrefs.SESSION_STATUS_TEXT, statusText);
         if (active) {
             startForegroundCompat();
-            updateStatusUi();
+            if (text != null && !text.trim().isEmpty()) showToast(statusText, statusState);
         }
     }
 
@@ -145,7 +151,9 @@ public class D0JOverlayService extends Service {
         D0JPrefs.setString(this, D0JPrefs.SESSION_STATUS, "stopped");
         D0JPrefs.setString(this, D0JPrefs.SESSION_STATUS_TEXT, "Session stopped");
         main.removeCallbacks(sessionWatchdog);
-        removePanel();
+        main.removeCallbacks(hideToastRunnable);
+        removeMenu();
+        removeToast();
         removeFloat();
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE);
@@ -255,81 +263,85 @@ public class D0JOverlayService extends Service {
     }
 
     private void togglePanel() {
-        if (panelView != null) removePanel();
-        else showPanel();
+        if (menuView != null) removeMenu();
+        else showMenu();
     }
 
-    private void showPanel() {
-        if (panelView != null) { updateStatusUi(); return; }
+    private void showMenu() {
+        if (menuView != null) return;
         DisplayMetrics dm = getResources().getDisplayMetrics();
-        int width = Math.min(dm.widthPixels - dp(24), dp(420));
+        int width = Math.min(dm.widthPixels - dp(16), dp(980));
+        int height = Math.min(dm.heightPixels - dp(24), dp(620));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#121212"));
+        bg.setColor(Color.parseColor("#101010"));
         bg.setCornerRadius(dp(20));
-        bg.setStroke(dp(1), Color.parseColor("#343434"));
+        bg.setStroke(dp(1), Color.parseColor("#3A3A3A"));
         root.setBackground(bg);
-        root.setPadding(dp(14), dp(12), dp(14), dp(14));
 
-        // Header
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = new TextView(this);
-        title.setText("D0J ENGINE");
-        title.setTextColor(Color.WHITE);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-        LinearLayout.LayoutParams tLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        header.addView(title, tLp);
-        Button close = smallBtn("X");
-        close.setOnClickListener(v -> removePanel());
-        header.addView(close);
-        root.addView(header);
+        // Drag handle row
+        LinearLayout handle = new LinearLayout(this);
+        handle.setOrientation(LinearLayout.HORIZONTAL);
+        handle.setGravity(Gravity.CENTER_VERTICAL);
+        handle.setPadding(dp(12), dp(8), dp(12), dp(8));
+        TextView dragHint = new TextView(this);
+        dragHint.setText("D0J MOD MENU · drag");
+        dragHint.setTextColor(Color.parseColor("#CCCCCC"));
+        dragHint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        handle.addView(dragHint, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        Button hide = smallBtn("Hide");
+        hide.setOnClickListener(v -> removeMenu());
+        handle.addView(hide);
+        root.addView(handle, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        statusLabel = new TextView(this);
-        statusLabel.setTextColor(Color.parseColor("#D0D0D0"));
-        statusLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        statusLabel.setPadding(0, dp(4), 0, dp(10));
-        root.addView(statusLabel);
-
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(content);
-        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Math.min(dm.heightPixels - dp(180), dp(520)));
-        root.addView(scroll, scrollLp);
-
-        content.addView(section("Session"));
-        content.addView(actionRow("Open App", v -> openApp()));
-        content.addView(actionRow("Launch 8BP", v -> launchPackage(sessionPackage)));
-        content.addView(actionRow("Stop Session", v -> {
-            D0JNativePlugin.notifyMenuCommand("stop");
-            stopSessionInternal();
-        }));
-
-        content.addView(section("Actions"));
-        content.addView(actionRow("Run Quick Test", v -> D0JNativePlugin.notifyMenuCommand("runTest")));
-        content.addView(actionRow("Toggle Auto Play", v -> D0JNativePlugin.notifyMenuCommand("toggleAutoPlay")));
-        content.addView(actionRow("Open Mod Menu", v -> { openApp(); removePanel(); }));
-
-        content.addView(section("Info"));
-        content.addView(infoText("Home screen is clean. Cheats are in mod menu during session."));
-        content.addView(infoText("Live 8BP lines need in-game bridge/patch. Overlay shows session controls only."));
+        android.webkit.WebView web = new android.webkit.WebView(this);
+        web.setBackgroundColor(Color.parseColor("#101010"));
+        android.webkit.WebSettings ws = web.getSettings();
+        ws.setJavaScriptEnabled(true);
+        ws.setDomStorageEnabled(true);
+        ws.setAllowFileAccess(true);
+        ws.setAllowContentAccess(true);
+        ws.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        web.setWebViewClient(new android.webkit.WebViewClient());
+        web.loadUrl("https://localhost/?overlay=1&ui=session");
+        menuWebView = web;
+        root.addView(web, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE;
-        panelParams = new WindowManager.LayoutParams(width, WindowManager.LayoutParams.WRAP_CONTENT, type,
+        menuParams = new WindowManager.LayoutParams(width, height, type,
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT);
-        panelParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        panelParams.y = dp(80);
-        panelView = root;
-        try { windowManager.addView(panelView, panelParams); } catch (Exception ignored) { panelView = null; }
-        updateStatusUi();
+        menuParams.gravity = Gravity.TOP | Gravity.START;
+        menuParams.x = D0JPrefs.getInt(this, D0JPrefs.FLOAT_X, dp(10));
+        menuParams.y = Math.max(dp(40), D0JPrefs.getInt(this, D0JPrefs.FLOAT_Y, dp(90)));
+
+        handle.setOnTouchListener(new View.OnTouchListener() {
+            float dx, dy; int sx, sy;
+            @Override public boolean onTouch(View v, MotionEvent e) {
+                if (menuParams == null || menuView == null) return false;
+                switch (e.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        dx = e.getRawX(); dy = e.getRawY(); sx = menuParams.x; sy = menuParams.y; return true;
+                    case MotionEvent.ACTION_MOVE:
+                        menuParams.x = Math.max(0, sx + (int)(e.getRawX() - dx));
+                        menuParams.y = Math.max(0, sy + (int)(e.getRawY() - dy));
+                        try { windowManager.updateViewLayout(menuView, menuParams); } catch (Exception ignored) {}
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        D0JPrefs.setInt(D0JOverlayService.this, D0JPrefs.FLOAT_X, menuParams.x);
+                        D0JPrefs.setInt(D0JOverlayService.this, D0JPrefs.FLOAT_Y, menuParams.y);
+                        return true;
+                }
+                return false;
+            }
+        });
+
+        menuView = root;
+        try { windowManager.addView(menuView, menuParams); } catch (Exception ignored) { menuView = null; menuWebView = null; }
     }
 
     private TextView section(String text) {
@@ -387,8 +399,50 @@ public class D0JOverlayService extends Service {
         return b;
     }
 
-    private void updateStatusUi() {
-        if (statusLabel != null) statusLabel.setText(statusText + " • " + sessionPackage);
+    private void showToast(String text, String kind) {
+        if (text == null || text.trim().isEmpty()) return;
+        removeToast();
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#EE101010"));
+        bg.setCornerRadius(dp(14));
+        String border = "fail".equals(kind) ? "#FF6666" : ("pass".equals(kind) ? "#66FF66" : "#555555");
+        bg.setStroke(dp(1), Color.parseColor(border));
+        root.setBackground(bg);
+        root.setPadding(dp(14), dp(10), dp(14), dp(10));
+
+        TextView t = new TextView(this);
+        t.setText("D0J ENGINE");
+        t.setTextColor(Color.WHITE);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        root.addView(t);
+        TextView b = new TextView(this);
+        b.setText(text);
+        b.setTextColor(Color.parseColor("#EAEAEA"));
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        root.addView(b);
+
+        int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : WindowManager.LayoutParams.TYPE_PHONE;
+        toastParams = new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT);
+        toastParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        toastParams.y = dp(20);
+        toastView = root;
+        try { windowManager.addView(toastView, toastParams); } catch (Exception ignored) { toastView = null; }
+        main.removeCallbacks(hideToastRunnable);
+        main.postDelayed(hideToastRunnable, 4200);
+    }
+
+    private void removeToast() {
+        if (toastView != null) {
+            try { windowManager.removeView(toastView); } catch (Exception ignored) {}
+            toastView = null;
+        }
     }
 
     private void openApp() {
@@ -410,11 +464,11 @@ public class D0JOverlayService extends Service {
         } catch (Exception ignored) {}
     }
 
-    private void removePanel() {
-        if (panelView != null) {
-            try { windowManager.removeView(panelView); } catch (Exception ignored) {}
-            panelView = null;
-            statusLabel = null;
+    private void removeMenu() {
+        if (menuView != null) {
+            try { windowManager.removeView(menuView); } catch (Exception ignored) {}
+            menuView = null;
+            menuWebView = null;
         }
     }
 
@@ -431,7 +485,9 @@ public class D0JOverlayService extends Service {
 
     @Override public void onDestroy() {
         main.removeCallbacks(sessionWatchdog);
-        removePanel();
+        main.removeCallbacks(hideToastRunnable);
+        removeMenu();
+        removeToast();
         removeFloat();
         active = false;
         super.onDestroy();

@@ -29,6 +29,7 @@ export const DEFAULT_CONFIG = {
   jitter: 0.4,
   retries: 2,
   stopOnManual: true,
+  queueTable: 'London',
   showLines: true,
   keepLines: true,
   powerLock: false,
@@ -50,7 +51,10 @@ export const DEFAULT_CONFIG = {
   notificationsEnabled: true,
   tempNotifications: true,
   runTestOnLaunch: true,
-  blockLaunchOnFail: false
+  blockLaunchOnFail: false,
+  menuSide: 'left',
+  menuX: 18,
+  menuY: 18
 }
 
 export function normalizeMode(value) {

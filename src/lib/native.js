@@ -17,6 +17,7 @@ const webFallback = {
   stopSession: async () => ({ ok: false, error: 'WEB_ONLY' }),
   getSessionStatus: async () => ({ active: false, sessionActive: false }),
   showNotification: async () => ({ ok: true, native: false }),
+  showToast: async () => ({ ok: true, native: false }),
   addListener: async () => noopHandle
 }
 
@@ -61,6 +62,7 @@ const native = {
   },
   setUnlocked: value => call('setUnlocked', { value: value === true }),
   showNotification: payload => call('showNotification', payload || {}),
+  showToast: payload => call('showToast', payload || {}),
   addListener: (eventName, listener) => {
     if (!Capacitor.isNativePlatform()) return Promise.resolve(noopHandle)
     try {

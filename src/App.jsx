@@ -14,6 +14,7 @@ import native from './lib/native.js'
 import { computePrediction, createDefaultTable } from './lib/prediction.js'
 
 function Main() {
+  const overlayMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('overlay') === '1'
   const [unlocked, setUnlocked] = useState(() => isUnlocked())
   const [tab, setTab] = useState('home')
   const [config, setConfigState] = useState(() => ({ ...DEFAULT_CONFIG, ...(getPref('config', {}) || {}) }))
@@ -26,6 +27,7 @@ function Main() {
   const [nativeStatus, setNativeStatus] = useState({ overlay: false, floating: false, native: native.isNative(), sessionActive: false })
   const [menuSignal, setMenuSignal] = useState(0)
   const [toast, setToast] = useState('')
+  const [toastKind, setToastKind] = useState('info')
   const [sessionStatus, setSessionStatus] = useState({ state: 'idle', text: 'Ready' })
   const [testReport, setTestReport] = useState({ at: 0, items: [] })
   const bridgeRef = useRef(null)
@@ -58,9 +60,13 @@ function Main() {
     }
   }
 
-  const say = (message, state = null) => {
+  const say = (message, state = null, kind = 'info') => {
     const text = String(message)
-    if (config.tempNotifications !== false) setToast(text)
+    if (config.tempNotifications !== false) {
+      setToastKind(kind)
+      setToast(text)
+      if (nativeStatus?.sessionActive) native.showToast({ text, kind }).catch(() => {})
+    }
     log(text)
     if (state) pushStatus(state, text, config.notificationsEnabled !== false)
   }
@@ -94,7 +100,12 @@ function Main() {
     const ok = items.every(i => i.ok)
     const report = { at: Date.now(), ok, reason, items }
     setTestReport(report)
-    say(`Quick test ${ok ? 'PASS' : 'FAIL'} · ${items.filter(i => i.ok).length}/${items.length}`, ok ? 'ready' : 'error')
+    const summary = `Quick test ${ok ? 'PASS' : 'FAIL'} · ${items.filter(i => i.ok).length}/${items.length}`
+    say(summary, ok ? 'ready' : 'error', ok ? 'pass' : 'fail')
+    if (config.tempNotifications !== false) {
+      native.showToast({ text: summary, kind: ok ? 'pass' : 'fail' }).catch(() => {})
+      native.showNotification({ title: 'D0J Test', text: summary, status: ok ? 'pass' : 'fail' }).catch(() => {})
+    }
     return report
   }
 
@@ -285,11 +296,37 @@ function Main() {
 
   useEffect(() => {
     if (!toast) return undefined
-    const timer = setTimeout(() => setToast(''), 3600)
+    const timer = setTimeout(() => setToast(''), 4200)
     return () => clearTimeout(timer)
   }, [toast])
 
   if (!unlocked) return <PassGate onUnlock={() => { setUnlocked(true); refreshNativeStatus() }} />
+
+  if (overlayMode) {
+    return (
+      <div className="overlay-mode-root">
+        <ModMenu
+          config={config}
+          setConfig={setConfig}
+          state={liveState}
+          nativeStatus={nativeStatus}
+          sessionStatus={sessionStatus}
+          testReport={testReport}
+          runningScript={runningScript}
+          runningLineScript={runningLineScript}
+          onClose={() => { native.showNotification({ title: 'D0J', text: 'Menu hidden · tap D0J button to open', status: 'running' }).catch(() => {}); window.close?.() }}
+          onPlay={handlePlay}
+          onStartSession={startSession}
+          onRunScript={runRatimoda}
+          onStop={handleStop}
+          onOpenTable={() => native.openApp().catch(() => {})}
+          onRunLineScript={runLineTest}
+          onRunQuickTest={runQuickTest}
+        />
+        {toast ? <div className={`ingame-toast ${toastKind}`}><b>D0J ENGINE</b>{toast}</div> : null}
+      </div>
+    )
+  }
 
   const homeScreen = (
     <Home
@@ -352,7 +389,7 @@ function Main() {
   return (
     <>
       {tab === 'settings' ? settingsScreen : tab === 'table' ? tableScreen : homeScreen}
-      {toast ? <div className="native-toast">{toast}</div> : null}
+      {toast ? <div className={`ingame-toast ${toastKind}`}><b>D0J ENGINE</b>{toast}</div> : null}
     </>
   )
 }
