@@ -187,7 +187,9 @@ public final class VMGameHost {
         gameTheme.applyStyle(theme, true);
         setField(activity, "mTheme", gameTheme);
         setField(activity, "mThemeResource", theme);
-        prepared.context.theme = gameTheme;
+        if (prepared.context instanceof GameContext) {
+            ((GameContext) prepared.context).theme = gameTheme;
+        }
         VMHosting.markStage(report, "THEME_APPLIED:" + theme);
     }
 
