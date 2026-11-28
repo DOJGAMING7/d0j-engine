@@ -136,6 +136,21 @@ export default function Settings({
     setVmBusy(false)
   }
 
+  const pickApk = async () => {
+    setVmBusy(true)
+    const picked = await native.pickApk().catch(e => ({ ok: false, error: String(e?.message || e) }))
+    if (picked?.ok && picked.path) {
+      setVmPath(picked.path)
+      const installed = await native.vmInstall(picked.path).catch(e => ({ ok: false, error: String(e?.message || e) }))
+      const detail = installed?.ok ? 'ok' : (installed?.error || installed?.reason || installed?.code || 'failed')
+      setVmMsg(`Picked: ${picked.name || picked.path} · Install: ${detail}`)
+    } else {
+      setVmMsg(`Pick: ${picked?.error || picked?.reason || 'cancelled'}`)
+    }
+    await refreshVm()
+    setVmBusy(false)
+  }
+
   const check = async () => {
     if (!url.trim()) return setMsg('Set a GitHub URL first')
     setBusy(true)
@@ -217,13 +232,16 @@ export default function Settings({
             <button className="btn primary" disabled={vmBusy} onClick={() => vmAction(() => native.vmAttach(), 'Hooks')}>Attach</button>
           </div>
           {hookInfo?.reason ? <div className="meta-line">Hook detail: {hookInfo.reason}</div> : null}
-          <label className="field-label">APK path on device</label>
+          <label className="field-label">APK path on device (or use the picker)</label>
           <div className="input-row">
             <input value={vmPath} placeholder="/sdcard/8bp.apk" onChange={e => setVmPath(e.target.value)} />
           </div>
           <div className="btn-row">
+            <button className="btn primary wide" disabled={vmBusy} onClick={pickApk}>Pick + Install APK</button>
+          </div>
+          <div className="btn-row">
             <button className="btn ghost" disabled={vmBusy} onClick={() => vmAction(() => native.vmDaemon(true), 'Daemon')}>Start daemon</button>
-            <button className="btn primary" disabled={vmBusy} onClick={() => vmAction(() => native.vmInstall(vmPath), 'Install')}>Install APK</button>
+            <button className="btn ghost" disabled={vmBusy} onClick={() => vmAction(() => native.vmInstall(vmPath), 'Install typed path')}>Install typed path</button>
           </div>
           <div className="btn-row">
             <button className="btn primary" disabled={vmBusy} onClick={() => vmAction(() => native.vmLaunch(GAME_PACKAGES.eightBallPool), 'Launch')}>Launch 8BP in VM</button>

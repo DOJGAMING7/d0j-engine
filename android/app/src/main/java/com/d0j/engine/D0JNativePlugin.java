@@ -16,6 +16,7 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import org.json.JSONArray;
@@ -483,6 +484,61 @@ public class D0JNativePlugin extends Plugin {
         Bundle args = new Bundle();
         args.putString("apkPath", call.getString("apkPath", ""));
         call.resolve(vmResult(vmCall("install", args)));
+    }
+
+    // Scoped storage blocks a plain File path to shared storage on Android 11+.
+    // Use the system file picker and copy the chosen document into app-private
+    // cache, then vmInstall() can read it without requesting storage access.
+    @PluginMethod
+    public void pickApk(PluginCall call) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startActivityForResult(call, intent, "handleApkPicked");
+        } catch (Exception e) {
+            call.reject("PICK_FAILED", String.valueOf(e.getMessage()));
+        }
+    }
+
+    @ActivityCallback
+    private void handleApkPicked(PluginCall call, androidx.activity.result.ActivityResult result) {
+        if (call == null) return;
+        if (result.getResultCode() != android.app.Activity.RESULT_OK || result.getData() == null) {
+            call.reject("PICK_CANCELLED");
+            return;
+        }
+        Uri uri = result.getData().getData();
+        if (uri == null) {
+            call.reject("NO_URI");
+            return;
+        }
+        try {
+            java.io.File target = new java.io.File(getContext().getCacheDir(), "vm-incoming.apk");
+            try (java.io.InputStream in = getContext().getContentResolver().openInputStream(uri);
+                 java.io.OutputStream out = new java.io.FileOutputStream(target)) {
+                if (in == null) throw new java.io.IOException("OPEN_FAILED");
+                byte[] buffer = new byte[16384];
+                int read;
+                while ((read = in.read(buffer)) > 0) out.write(buffer, 0, read);
+            }
+            String name = "";
+            try (android.database.Cursor cursor = getContext().getContentResolver().query(uri, null, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                    if (index >= 0) name = cursor.getString(index);
+                }
+            } catch (Exception ignored) { }
+            JSObject res = new JSObject();
+            res.put("ok", true);
+            res.put("path", target.getAbsolutePath());
+            res.put("name", name);
+            res.put("size", target.length());
+            call.resolve(res);
+        } catch (Exception e) {
+            call.reject("COPY_FAILED", String.valueOf(e.getMessage()));
+        }
     }
 
     @PluginMethod

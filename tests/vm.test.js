@@ -56,6 +56,20 @@ test('native bridge and Capacitor plugin expose VM calls', () => {
   assert.ok(plugin.includes('call(uri, "VM", null, args)'))
 })
 
+test('APK picker avoids blocked shared-storage paths', () => {
+  const nativeJs = read('src/lib/native.js')
+  const plugin = read('android/app/src/main/java/com/d0j/engine/D0JNativePlugin.java')
+  const settings = read('src/screens/Settings.jsx')
+
+  assert.ok(nativeJs.includes('pickApk:'))
+  assert.ok(plugin.includes('public void pickApk(PluginCall call)'))
+  assert.ok(plugin.includes('@ActivityCallback'))
+  assert.ok(plugin.includes('ACTION_OPEN_DOCUMENT'))
+  assert.ok(plugin.includes('vm-incoming.apk'))
+  assert.ok(settings.includes('native.pickApk'))
+  assert.ok(settings.includes('Pick + Install APK'))
+})
+
 test('step 3 hooks are attemptable but never claimed as device verified', () => {
   const installer = read(vmDir + 'VMHookInstaller.java')
   const hidden = read(vmDir + 'VMHiddenApi.java')
