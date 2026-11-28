@@ -45,6 +45,19 @@ test('VM install and launch really parse APKs and extract native libraries', () 
   assert.ok(libs.includes('setExecutable'))
 })
 
+test('VM stages the APK read-only before classloading', () => {
+  const core = read(vmDir + 'VMCore.java')
+
+  assert.ok(core.includes('Writable dex file'), 'documents the Android 10+ restriction')
+  assert.ok(core.includes('private String stageApk('))
+  assert.ok(core.includes('makeReadOnly('))
+  assert.ok(core.includes('Os.chmod('))
+  assert.ok(core.includes('new File(apkDir,'))
+  assert.ok(core.includes('entry.apkPath = stageApk(file, info.packageName)'))
+  assert.ok(core.includes('installedApk.canWrite()'), 'restages legacy writable entries')
+  assert.ok(core.includes('new dalvik.system.DexClassLoader(\n                entry.apkPath'))
+})
+
 test('native bridge and Capacitor plugin expose VM calls', () => {
   const nativeJs = read('src/lib/native.js')
   const plugin = read('android/app/src/main/java/com/d0j/engine/D0JNativePlugin.java')

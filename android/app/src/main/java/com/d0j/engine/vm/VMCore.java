@@ -11,6 +11,11 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -35,6 +40,7 @@ public final class VMCore {
     private final File root;
     private final File dexDir;
     private final File libsDir;
+    private final File apkDir;
     private final Map<String, VMRegisteredApp> apps = new ConcurrentHashMap<String, VMRegisteredApp>();
     private final Map<String, ClassLoader> loaders = new ConcurrentHashMap<String, ClassLoader>();
     private final Set<String> liveProcesses = Collections.synchronizedSet(new HashSet<String>());
@@ -45,9 +51,11 @@ public final class VMCore {
         this.root = new File(app.getFilesDir(), "vm");
         this.dexDir = new File(root, "dex");
         this.libsDir = new File(root, "libs");
+        this.apkDir = new File(root, "apk");
         mkdir(root);
         mkdir(dexDir);
         mkdir(libsDir);
+        mkdir(apkDir);
         loadRegistry();
     }
 
@@ -69,6 +77,41 @@ public final class VMCore {
         if (!dir.isDirectory() && !dir.mkdirs()) Log.w(TAG, "Cannot create " + dir);
     }
 
+    /**
+     * Android 10+ refuses to classload a DEX/APK from a writable directory
+     * ("Writable dex file ... is not allowed"). Keep a private, read-only copy
+     * for DexClassLoader. The user's selected file is never modified.
+     */
+    private String stageApk(File source, String packageName) throws VMException {
+        File target = new File(apkDir, safe(packageName) + ".apk");
+        try {
+            if (target.getCanonicalPath().equals(source.getCanonicalPath())) {
+                makeReadOnly(target);
+                return target.getAbsolutePath();
+            }
+            if (target.exists()) target.setWritable(true, false);
+            try (InputStream in = new FileInputStream(source);
+                 OutputStream out = new FileOutputStream(target, false)) {
+                byte[] buffer = new byte[16384];
+                int read;
+                while ((read = in.read(buffer)) > 0) out.write(buffer, 0, read);
+            }
+            makeReadOnly(target);
+        } catch (IOException e) {
+            throw new VMException("STAGE_FAILED", String.valueOf(e.getMessage()));
+        }
+        return target.getAbsolutePath();
+    }
+
+    private static void makeReadOnly(File file) {
+        try {
+            file.setWritable(false, false);
+            android.system.Os.chmod(file.getAbsolutePath(), 0444);
+        } catch (Throwable ignored) {
+            try { file.setWritable(false, false); } catch (Throwable ignored2) { }
+        }
+    }
+
     public VMRegisteredApp install(String apkPath) throws VMException {
         if (apkPath == null || apkPath.trim().isEmpty()) {
             throw new VMException("NO_APK_PATH", "APK path is empty");
@@ -87,7 +130,7 @@ public final class VMCore {
 
         VMRegisteredApp entry = new VMRegisteredApp();
         entry.packageName = info.packageName;
-        entry.apkPath = file.getAbsolutePath();
+        entry.apkPath = stageApk(file, info.packageName);
         entry.versionName = info.versionName == null ? "" : info.versionName;
         entry.versionCode = info.versionCode;
         entry.processIndex = Math.abs(info.packageName.hashCode()) % PROCESS_COUNT;
@@ -123,6 +166,14 @@ public final class VMCore {
         String target = activityName == null || activityName.trim().isEmpty()
                 ? entry.launchActivity : activityName.trim();
         if (target.isEmpty()) throw new VMException("NO_ACTIVITY", "No launch activity recorded for " + packageName);
+
+        // Entries installed by older builds may still point at a writable cache
+        // file. Restage them so the classloader never sees a writable dex.
+        File installedApk = new File(entry.apkPath);
+        if (!installedApk.isFile() || installedApk.canWrite()) {
+            entry.apkPath = stageApk(installedApk, packageName);
+            saveRegistry();
+        }
 
         File outDex = new File(dexDir, safe(packageName));
         File outLibs = new File(libsDir, safe(packageName));
