@@ -9,6 +9,7 @@ import {
   validateBindings,
   validateJava,
   validateManifest,
+  validateOffline,
   validatePackage,
   validateScripts,
   validateVersionMatrix,
@@ -53,7 +54,7 @@ test('balance scan catches malformed Java structure', () => {
 test('release inputs are consistent across package, scripts and native assets', () => {
   const pkg = validatePackage(root)
   assert.equal(pkg.ok, true)
-  assert.equal(pkg.version, '2.1.1')
+  assert.equal(pkg.version, '2.1.2')
 
   // CI runs tests before build/cap sync, so generated files may be absent.
   const temp = hasBuildArtifacts() ? null : fixtureRoot()
@@ -104,8 +105,9 @@ test('Java sources keep the compile-time imports and typed defaults', () => {
   const daemon = read('android/app/src/main/java/com/d0j/engine/vm/VMDaemonService.java')
   assert.match(daemon, /import android\.content\.ServiceConnection;/)
 
-  const overlay = read('android/app/src/main/java/com/d0j/engine/D0JOverlayService.java')
-  assert.match(overlay, /Settings\.canDrawOverlays\(context\)/)
+  const hud = read('android/app/src/main/java/com/d0j/engine/D0JGameHud.java')
+  assert.match(hud, /decor\.addView\(container\)/)
+  assert.match(hud, /public static final String ACTION_LINES/)
 
   const input = read('android/app/src/main/java/com/d0j/engine/vm/VMActivityInputInjector.java')
   assert.match(input, /coords\.pressure = pressure\[index\]/)
@@ -119,6 +121,46 @@ test('Java sources keep the compile-time imports and typed defaults', () => {
   assert.match(plugin, /getDouble\("x", 0d\)\.floatValue\(\)/)
   assert.match(plugin, /getDouble\("duration", 180d\)\.longValue\(\)/)
   assert.match(plugin, /getLong\("base", 0L\)/)
+})
+
+test('in-window HUD compiles cleanly and drag targets stay in the FrameLayout', () => {
+  const hud = read('android/app/src/main/java/com/d0j/engine/D0JGameHud.java')
+  assert.match(hud, /existing\.removeViews\(\)/)
+  assert.ok(!hud.includes('existing.detach()'), 'no no-arg detach method exists')
+  assert.match(hud, /new RailTouch\(railView, lp\)/)
+  assert.match(hud, /new RailTouch\(root, lp\)/)
+  assert.match(hud, /target\.setLayoutParams\(params\)/)
+  assert.ok(!hud.includes('view.setLayoutParams(params)'))
+
+  const service = read('android/app/src/main/java/com/d0j/engine/D0JSessionService.java')
+  assert.match(service, /setSmallIcon\(R\.drawable\.ic_snake_badge\)/)
+  assert.ok(!service.includes('android.R.drawable.ic_menu_compass'))
+  assert.ok(!service.includes('new Notification.Action.Builder(null'))
+  assert.match(service, /D0JGameHud\.pushLines\(this, "\{\}"\)/)
+})
+
+test('official PNG icons replace every fake vector logo path', () => {
+  const res = 'android/app/src/main/res/'
+  assert.equal(existsSync(resolve(root, res + 'drawable/ic_snake_badge.png')), true)
+  assert.equal(existsSync(resolve(root, res + 'drawable/ic_snake_mark.png')), true)
+  assert.equal(existsSync(resolve(root, res + 'drawable/ic_snake_mark.xml')), false)
+  assert.equal(existsSync(resolve(root, res + 'drawable-v24/ic_launcher_foreground.xml')), false)
+  assert.equal(existsSync(resolve(root, res + 'drawable/ic_launcher_background.xml')), false)
+  for (const file of ['mipmap-anydpi-v26/ic_launcher.xml', 'mipmap-anydpi-v26/ic_launcher_round.xml']) {
+    assert.match(read(res + file), /@drawable\/ic_snake_mark/)
+  }
+})
+
+test('offline guarantee: scripts bundled, no remote fetch, no key gate', () => {
+  const offline = validateOffline(root)
+  assert.equal(offline.ok, true, offline.detail)
+  assert.equal(offline.bundled, true)
+  assert.equal(offline.predictionHash, 'a3f3ae3b8ff6d1ebf6a9da41b8d1304878d1cd95f166e948dde57f72eed811eb')
+  assert.deepEqual(offline.failures, [])
+
+  const runner = read('src/lib/scriptRunner.js')
+  assert.ok(runner.includes('remote script source blocked'))
+  assert.ok(!runner.includes('http'))
 })
 
 test('stale native web assets are detected', () => {

@@ -18,6 +18,15 @@ import java.util.zip.ZipFile;
 public final class VMNativeLibs {
     private VMNativeLibs() {}
 
+    public static int extract(String[] apkPaths, File destDir) throws IOException {
+        int total = 0;
+        for (String path : apkPaths) {
+            if (path == null || path.trim().isEmpty()) continue;
+            total += extract(path, destDir);
+        }
+        return total;
+    }
+
     public static int extract(String apkPath, File destDir) throws IOException {
         File target = destDir;
         if (!target.isDirectory() && !target.mkdirs()) throw new IOException("Cannot create " + target);

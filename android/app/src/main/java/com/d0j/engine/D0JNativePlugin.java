@@ -5,7 +5,6 @@ import android.app.AppOpsManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.media.Image;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -46,7 +45,7 @@ import java.util.Iterator;
 public class D0JNativePlugin extends Plugin {
     private static volatile D0JNativePlugin instance;
 
-    // Session-scoped screen reading. Frames stay in process and are never uploaded.
+    // Local-only bridge. No screen capture, no key server, no system overlay.
 
     @Override
     public void load() {
@@ -80,59 +79,19 @@ public class D0JNativePlugin extends Plugin {
     }
 
     @PluginMethod
-    public void hasOverlayPermission(PluginCall call) {
-        JSObject res = new JSObject();
-        res.put("granted", canOverlay(getContext()));
-        call.resolve(res);
-    }
-
-    @PluginMethod
-    public void requestOverlayPermission(PluginCall call) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !canOverlay(getContext())) {
-            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getContext().getPackageName()));
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            try {
-                getContext().startActivity(intent);
-            } catch (Exception e) {
-                call.reject("OVERLAY_SETTINGS_FAILED");
-                return;
-            }
-        }
-        JSObject res = new JSObject();
-        res.put("ok", true);
-        call.resolve(res);
-    }
-
-    @PluginMethod
-    public void startFloating(PluginCall call) {
-        startSessionOverlay(call);
-    }
-
-    @PluginMethod
     public void startSession(PluginCall call) {
-        startSessionOverlay(call);
-    }
-
-    private void startSessionOverlay(PluginCall call) {
         if (!D0JPrefs.getBoolean(getContext(), D0JPrefs.UNLOCKED, false)) {
             call.reject("LOCKED");
             return;
         }
-        if (!canOverlay(getContext())) {
-            call.reject("OVERLAY_PERMISSION_REQUIRED");
-            return;
-        }
-
         String packageName = call.getString("packageName", "com.miniclip.eightballpool");
-        boolean launchGame = Boolean.TRUE.equals(call.getBoolean("launchGame", false));
 
         D0JPrefs.setBoolean(getContext(), D0JPrefs.SESSION_ACTIVE, true);
         D0JPrefs.setString(getContext(), D0JPrefs.SESSION_PACKAGE, packageName);
 
-        Intent intent = new Intent(getContext(), D0JOverlayService.class);
-        intent.setAction(D0JOverlayService.ACTION_START_SESSION);
+        Intent intent = new Intent(getContext(), D0JSessionService.class);
+        intent.setAction(D0JSessionService.ACTION_START_SESSION);
         intent.putExtra("packageName", packageName);
-        intent.putExtra("launchGame", launchGame);
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 getContext().startForegroundService(intent);
@@ -148,23 +107,20 @@ public class D0JNativePlugin extends Plugin {
         res.put("ok", true);
         res.put("sessionActive", true);
         res.put("packageName", packageName);
+        res.put("overlayPermission", "NOT_REQUIRED");
         call.resolve(res);
-    }
-
-    @PluginMethod
-    public void stopFloating(PluginCall call) {
-        stopSession(call);
     }
 
     @PluginMethod
     public void stopSession(PluginCall call) {
         D0JPrefs.setBoolean(getContext(), D0JPrefs.SESSION_ACTIVE, false);
+        D0JGameHud.clearLines();
         try {
-            Intent intent = new Intent(getContext(), D0JOverlayService.class);
-            intent.setAction(D0JOverlayService.ACTION_STOP_SESSION);
+            Intent intent = new Intent(getContext(), D0JSessionService.class);
+            intent.setAction(D0JSessionService.ACTION_STOP_SESSION);
             getContext().startService(intent);
         } catch (Exception ignored) {
-            try { getContext().stopService(new Intent(getContext(), D0JOverlayService.class)); } catch (Exception ignored2) {}
+            try { getContext().stopService(new Intent(getContext(), D0JSessionService.class)); } catch (Exception ignored2) { }
         }
         JSObject res = new JSObject();
         res.put("ok", true);
@@ -173,9 +129,11 @@ public class D0JNativePlugin extends Plugin {
     }
 
     @PluginMethod
-    public void isFloatingActive(PluginCall call) {
+    public void isInGameHudActive(PluginCall call) {
         JSObject res = new JSObject();
-        res.put("active", D0JOverlayService.isActive());
+        res.put("active", D0JGameHud.isAttached());
+        res.put("inWindow", D0JGameHud.isAttached());
+        res.put("systemOverlay", false);
         res.put("sessionActive", D0JPrefs.getBoolean(getContext(), D0JPrefs.SESSION_ACTIVE, false));
         call.resolve(res);
     }
@@ -183,8 +141,10 @@ public class D0JNativePlugin extends Plugin {
     @PluginMethod
     public void getSessionStatus(PluginCall call) {
         JSObject res = new JSObject();
-        res.put("active", D0JOverlayService.isActive());
+        res.put("active", D0JSessionService.isActive());
         res.put("sessionActive", D0JPrefs.getBoolean(getContext(), D0JPrefs.SESSION_ACTIVE, false));
+        res.put("inWindow", D0JGameHud.isAttached());
+        res.put("systemOverlay", false);
         res.put("packageName", D0JPrefs.getString(getContext(), D0JPrefs.SESSION_PACKAGE, "com.miniclip.eightballpool"));
         call.resolve(res);
     }
@@ -336,8 +296,8 @@ public class D0JNativePlugin extends Plugin {
         D0JPrefs.setString(getContext(), D0JPrefs.SESSION_STATUS, status);
         D0JPrefs.setString(getContext(), D0JPrefs.SESSION_STATUS_TEXT, text);
         try {
-            Intent intent = new Intent(getContext(), D0JOverlayService.class);
-            intent.setAction(D0JOverlayService.ACTION_UPDATE_STATUS);
+            Intent intent = new Intent(getContext(), D0JSessionService.class);
+            intent.setAction(D0JSessionService.ACTION_UPDATE_STATUS);
             intent.putExtra("title", title);
             intent.putExtra("text", text);
             intent.putExtra("status", status);
@@ -358,8 +318,8 @@ public class D0JNativePlugin extends Plugin {
             return;
         }
         try {
-            Intent intent = new Intent(getContext(), D0JOverlayService.class);
-            intent.setAction(D0JOverlayService.ACTION_SHOW_TOAST);
+            Intent intent = new Intent(getContext(), D0JSessionService.class);
+            intent.setAction(D0JSessionService.ACTION_SHOW_TOAST);
             intent.putExtra("text", text);
             intent.putExtra("kind", kind);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) getContext().startForegroundService(intent);
@@ -419,28 +379,17 @@ public class D0JNativePlugin extends Plugin {
         call.resolve(vmResult(vmCall("probeMaps", new Bundle())));
     }
 
+    /** Line specs are local data delivered to the in-window HUD, never a system overlay. */
     @PluginMethod
     public void setOverlayLines(PluginCall call) {
-        Intent intent = new Intent(getContext(), D0JOverlayService.class)
-                .setAction(D0JOverlayService.ACTION_UPDATE_LINES)
-                .putExtra("json", call.getString("json", "{}"));
-        startOverlayService(intent);
+        D0JGameHud.pushLines(getContext(), call.getString("json", "{}"));
         call.resolve(new JSObject().put("ok", true));
     }
 
     @PluginMethod
     public void clearOverlayLines(PluginCall call) {
-        Intent intent = new Intent(getContext(), D0JOverlayService.class)
-                .setAction(D0JOverlayService.ACTION_CLEAR_LINES);
-        startOverlayService(intent);
+        D0JGameHud.pushLines(getContext(), "{}");
         call.resolve(new JSObject().put("ok", true));
-    }
-
-    private void startOverlayService(Intent intent) {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) getContext().startForegroundService(intent);
-            else getContext().startService(intent);
-        } catch (Exception ignored) { }
     }
 
     @PluginMethod
@@ -508,6 +457,14 @@ public class D0JNativePlugin extends Plugin {
         call.resolve(vmResult(vmCall("status", new Bundle())));
     }
 
+    /** Read-only discovery of an installed game. Never copies or modifies its APK. */
+    @PluginMethod
+    public void discoverGame(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putString("packageName", call.getString("packageName", ""));
+        call.resolve(vmResult(vmCall("discover", args)));
+    }
+
     @PluginMethod
     public void vmList(PluginCall call) {
         call.resolve(vmResult(vmCall("list", new Bundle())));
@@ -518,6 +475,14 @@ public class D0JNativePlugin extends Plugin {
         Bundle args = new Bundle();
         args.putString("apkPath", call.getString("apkPath", ""));
         call.resolve(vmResult(vmCall("install", args)));
+    }
+
+    /** Registers an installed game by path; the game APK is never copied. */
+    @PluginMethod
+    public void vmRegisterInstalled(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putString("packageName", call.getString("packageName", ""));
+        call.resolve(vmResult(vmCall("registerInstalled", args)));
     }
 
     // Scoped storage blocks a plain File path to shared storage on Android 11+.
@@ -728,10 +693,6 @@ public class D0JNativePlugin extends Plugin {
         return String.valueOf(value);
     }
 
-    private static boolean canOverlay(Context context) {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context);
-    }
-
     static void notifyFloatingTap() {
         notify("floatingTap", new JSObject().put("event", "floatingTap"));
     }
@@ -744,7 +705,7 @@ public class D0JNativePlugin extends Plugin {
 
     static void notifyConfigChanged(JSObject patch) {
         notify("configChanged", patch == null ? new JSObject() : patch);
-        D0JOverlayService.onConfigChanged(patch);
+        D0JGameHud.refreshQuickControls();
     }
 
     static void notifySessionEnded(String reason) {

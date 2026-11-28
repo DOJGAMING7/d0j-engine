@@ -59,6 +59,9 @@ public final class VMCore {
         loadRegistry();
     }
 
+    /** Instance already created on this process, or null before bootstrap. */
+    public static VMCore peek() { return instance; }
+
     public static VMCore get(Context context) {
         VMCore value = instance;
         if (value == null) {
@@ -193,6 +196,28 @@ public final class VMCore {
         return entry;
     }
 
+    /** Builds the game classloader inside a hosted child process without starting an Activity. */
+    public boolean prepare(String packageName) throws VMException {
+        VMRegisteredApp entry = apps.get(packageName == null ? "" : packageName);
+        if (entry == null) return false;
+        File outDex = new File(dexDir, safe(packageName));
+        File outLibs = new File(libsDir, safe(packageName));
+        mkdir(outDex);
+        mkdir(outLibs);
+        try {
+            List<String> sources = new ArrayList<String>();
+            sources.add(entry.apkPath);
+            sources.addAll(entry.splitApkPaths);
+            VMNativeLibs.extract(sources.toArray(new String[0]), outLibs);
+        } catch (Exception e) {
+            throw new VMException("LIB_EXTRACT_FAILED", String.valueOf(e.getMessage()));
+        }
+        ClassLoader loader = new dalvik.system.DexClassLoader(
+                entry.apkClassPath(), outDex.getAbsolutePath(), outLibs.getAbsolutePath(), app.getClassLoader());
+        loaders.put(packageName, loader);
+        return true;
+    }
+
     public JSONObject launch(String packageName, String activityName) throws VMException {
         VMRegisteredApp entry = apps.get(packageName);
         if (entry == null) throw new VMException("NOT_INSTALLED", "Not installed in VM: " + packageName);
@@ -216,13 +241,16 @@ public final class VMCore {
 
         int libs;
         try {
-            libs = VMNativeLibs.extract(entry.apkPath, outLibs);
+            java.util.List<String> sources = new ArrayList<String>();
+            sources.add(entry.apkPath);
+            sources.addAll(entry.splitApkPaths);
+            libs = VMNativeLibs.extract(sources.toArray(new String[0]), outLibs);
         } catch (Exception e) {
             throw new VMException("LIB_EXTRACT_FAILED", String.valueOf(e.getMessage()));
         }
 
         ClassLoader loader = new dalvik.system.DexClassLoader(
-                entry.apkPath, outDex.getAbsolutePath(), outLibs.getAbsolutePath(), app.getClassLoader());
+                entry.apkClassPath(), outDex.getAbsolutePath(), outLibs.getAbsolutePath(), app.getClassLoader());
         loaders.put(packageName, loader);
 
         VMInstrumentation instrumentation = VMRuntime.get();
@@ -247,6 +275,111 @@ public final class VMCore {
             throw new VMException("RESULT_FAILED", String.valueOf(e.getMessage()));
         }
         return result;
+    }
+
+    /**
+     * Read-only discovery of a Play Store installed game. The APK is never
+     * copied, patched, re-signed or modified here.
+     */
+    public JSONObject discoverInstalled(String packageName) throws VMException {
+        if (packageName == null || packageName.trim().isEmpty()) {
+            throw new VMException("NO_PACKAGE", "Package name is empty");
+        }
+        String pkg = packageName.trim();
+        try {
+            PackageInfo info = app.getPackageManager().getPackageInfo(pkg,
+                    PackageManager.GET_ACTIVITIES | PackageManager.GET_META_DATA);
+            if (info == null || info.applicationInfo == null) {
+                throw new VMException("NOT_INSTALLED", "Not installed: " + pkg);
+            }
+            android.content.pm.ApplicationInfo application = info.applicationInfo;
+            java.util.List<String> activityNames = new ArrayList<String>();
+            if (info.activities != null) {
+                for (ActivityInfo activity : info.activities) {
+                    if (activity.name != null && !activity.name.trim().isEmpty()) {
+                        activityNames.add(activity.name);
+                    }
+                }
+            }
+            String[] splits = application.splitSourceDirs;
+            JSONArray splitPaths = new JSONArray();
+            if (splits != null) {
+                for (String split : splits) splitPaths.put(split == null ? "" : split);
+            }
+            JSONObject value = new JSONObject();
+            value.put("ok", true);
+            value.put("installed", true);
+            value.put("source", "PLAY_STORE");
+            value.put("modified", false);
+            value.put("packageName", pkg);
+            value.put("label", String.valueOf(app.getPackageManager().getApplicationLabel(application)));
+            value.put("versionName", info.versionName == null ? "" : info.versionName);
+            value.put("versionCode", info.versionCode);
+            value.put("sourceDir", application.sourceDir == null ? "" : application.sourceDir);
+            value.put("splitSourceDirs", splitPaths);
+            value.put("splitCount", splits == null ? 0 : splits.length);
+            value.put("nativeLibraryDir", application.nativeLibraryDir == null ? "" : application.nativeLibraryDir);
+            value.put("launchActivity", chooseLaunchActivity(activityNames));
+            value.put("activities", new JSONArray(activityNames));
+            value.put("activityCount", activityNames.size());
+            value.put("state", "DISCOVERED");
+            return value;
+        } catch (VMException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new VMException("DISCOVER_FAILED", String.valueOf(e.getMessage()));
+        }
+    }
+
+    /**
+     * Registers an already installed game by pointing at the Play Store paths.
+     * Unlike install(), this never copies, patches or re-signs the game APK.
+     */
+    public VMRegisteredApp registerInstalled(String packageName) throws VMException {
+        if (packageName == null || packageName.trim().isEmpty()) {
+            throw new VMException("NO_PACKAGE", "Package name is empty");
+        }
+        String pkg = packageName.trim();
+        try {
+            PackageInfo info = app.getPackageManager().getPackageInfo(pkg,
+                    PackageManager.GET_ACTIVITIES | PackageManager.GET_META_DATA);
+            if (info == null || info.applicationInfo == null) {
+                throw new VMException("NOT_INSTALLED", "Not installed: " + pkg);
+            }
+            android.content.pm.ApplicationInfo application = info.applicationInfo;
+            VMRegisteredApp entry = new VMRegisteredApp();
+            entry.packageName = pkg;
+            entry.apkPath = application.sourceDir == null ? "" : application.sourceDir;
+            entry.nativeLibraryDir = application.nativeLibraryDir == null ? "" : application.nativeLibraryDir;
+            entry.versionName = info.versionName == null ? "" : info.versionName;
+            entry.versionCode = info.versionCode;
+            entry.processIndex = Math.abs(pkg.hashCode()) % PROCESS_COUNT;
+            if (application.splitSourceDirs != null) {
+                for (String split : application.splitSourceDirs) {
+                    if (split != null && !split.trim().isEmpty()) entry.splitApkPaths.add(split);
+                }
+            }
+            if (info.activities != null) {
+                for (ActivityInfo activity : info.activities) {
+                    if (activity.name != null && !activity.name.trim().isEmpty()) {
+                        entry.activities.add(activity.name);
+                    }
+                }
+            }
+            entry.launchActivity = chooseLaunchActivity(entry.activities);
+            try {
+                entry.label = String.valueOf(app.getPackageManager().getApplicationLabel(application));
+            } catch (Exception ignored) {
+                entry.label = pkg;
+            }
+            apps.put(pkg, entry);
+            saveRegistry();
+            return entry;
+        } catch (VMException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new VMException("REGISTER_FAILED", String.valueOf(e.getMessage()));
+        }
     }
 
     public JSONObject status() throws VMException {
@@ -319,7 +452,7 @@ public final class VMCore {
                 value.put("processIndex", entry.processIndex);
                 array.put(value);
             }
-            prefs().edit().putString(KEY_REGISTRY, array.toString()).apply();
+            prefs().edit().putString(KEY_REGISTRY, array.toString()).commit();
         } catch (Exception e) {
             Log.w(TAG, "registry save failed", e);
         }

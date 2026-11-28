@@ -75,7 +75,7 @@ test('step 6 input RPC, bindings and session controls are wired', () => {
   const nativeJs = read('src/lib/native.js')
   const settings = read('src/screens/Settings.jsx')
   const menu = read('src/components/ModMenu.jsx')
-  const overlay = read('android/app/src/main/java/com/d0j/engine/D0JOverlayService.java')
+  const hud = read('android/app/src/main/java/com/d0j/engine/D0JGameHud.java')
   const app = read('src/App.jsx')
 
   assert.ok(injector.includes('swipe('))
@@ -84,7 +84,7 @@ test('step 6 input RPC, bindings and session controls are wired', () => {
   assert.ok(provider.includes('"INPUT"'))
   assert.ok(remote.includes('.vminput.p'))
   assert.ok(proxy.includes('VMActivityInputInjector.bind(this)'))
-  assert.ok(hook.includes('VMActivityInputInjector.bind(hosted)'))
+  assert.ok(hook.includes('VMActivityInputInjector.bind(activity)'))
   assert.ok(callProvider.includes('inputSwipe'))
   assert.ok(callProvider.includes('attachInput'))
   assert.equal((manifest.match(/\.vminput\.p[0-3]/g) || []).length, 4)
@@ -94,7 +94,7 @@ test('step 6 input RPC, bindings and session controls are wired', () => {
   }
   assert.ok(settings.includes('Live Input + Auto Play'))
   assert.ok(menu.includes('START LIVE AUTO'))
-  assert.ok(overlay.includes('Attach Live Input'))
+  assert.ok(hud.includes('START LIVE AUTO'))
   assert.ok(app.includes("command === 'autoLiveStart'"))
   assert.ok(app.includes('planHumanShot(built, chosen.shot, liveConfig, motion)'))
 })

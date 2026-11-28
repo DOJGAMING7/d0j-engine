@@ -11,6 +11,8 @@ public final class VMRegisteredApp {
     public String packageName = "";
     public String label = "";
     public String apkPath = "";
+    public final List<String> splitApkPaths = new ArrayList<String>();
+    public String nativeLibraryDir = "";
     public String versionName = "";
     public long versionCode = 0;
     public int processIndex = 0;
@@ -22,6 +24,8 @@ public final class VMRegisteredApp {
         value.put("packageName", packageName);
         value.put("label", label);
         value.put("apkPath", apkPath);
+        value.put("splitApkPaths", new JSONArray(splitApkPaths));
+        value.put("nativeLibraryDir", nativeLibraryDir);
         value.put("versionName", versionName);
         value.put("versionCode", versionCode);
         value.put("processIndex", processIndex);
@@ -31,11 +35,26 @@ public final class VMRegisteredApp {
         return value;
     }
 
+    /** DexClassLoader accepts a colon-separated list of installed APK paths. */
+    public String apkClassPath() {
+        StringBuilder builder = new StringBuilder(apkPath == null ? "" : apkPath);
+        for (String split : splitApkPaths) {
+            if (split == null || split.trim().isEmpty()) continue;
+            builder.append(':').append(split);
+        }
+        return builder.toString();
+    }
+
     public static VMRegisteredApp fromJson(JSONObject value) throws Exception {
         VMRegisteredApp entry = new VMRegisteredApp();
         entry.packageName = value.optString("packageName", "");
         entry.label = value.optString("label", "");
         entry.apkPath = value.optString("apkPath", "");
+        entry.nativeLibraryDir = value.optString("nativeLibraryDir", "");
+        JSONArray splits = value.optJSONArray("splitApkPaths");
+        if (splits != null) {
+            for (int i = 0; i < splits.length(); i++) entry.splitApkPaths.add(splits.optString(i, ""));
+        }
         entry.versionName = value.optString("versionName", "");
         entry.versionCode = value.optLong("versionCode", 0);
         entry.processIndex = value.optInt("processIndex", 0);

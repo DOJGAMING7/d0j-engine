@@ -256,6 +256,7 @@ public final class VMHookInstaller {
                             context.getPackageName(), proxyActivity(app.processIndex)));
                     redirected.putExtra("vmPackage", app.packageName);
                     redirected.putExtra("vmActivity", activity);
+                    redirected.putExtra("processIndex", app.processIndex);
                     args[i] = redirected;
                     break;
                 }

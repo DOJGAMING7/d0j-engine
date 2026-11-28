@@ -5,11 +5,7 @@ const webFallback = {
   ping: async () => ({ ok: false, native: false }),
   getLastCrash: async () => ({ ok: false, text: '' }),
   clearLastCrash: async () => ({ ok: false }),
-  hasOverlayPermission: async () => ({ granted: true, native: false }),
-  requestOverlayPermission: async () => ({ ok: true, native: false }),
-  startFloating: async () => ({ ok: false, error: 'WEB_ONLY' }),
-  stopFloating: async () => ({ ok: false, error: 'WEB_ONLY' }),
-  isFloatingActive: async () => ({ active: false, sessionActive: false }),
+  isInGameHudActive: async () => ({ active: false, inWindow: false, sessionActive: false }),
   launchGame: async packageName => ({ ok: false, error: 'WEB_ONLY', packageName }),
   openApp: async () => ({ ok: false, error: 'WEB_ONLY' }),
   syncConfig: async () => ({ ok: true, native: false }),
@@ -24,6 +20,7 @@ const webFallback = {
   requestNotificationPermission: async () => ({ granted: true }),
   hasUsageAccess: async () => ({ granted: false }),
   requestUsageAccess: async () => ({ ok: false }),
+  discoverGame: async () => ({ ok: false, error: 'WEB_ONLY', installed: false }),
   vmStatus: async () => ({ ok: false, ready: false, state: 'WEB_ONLY', reason: 'WEB_ONLY' }),
   vmSessionWatch: async () => ({ ok: false, verdict: 'UNKNOWN', evidence: 'NONE', state: 'WEB_ONLY' }),
   setOverlayLines: async () => ({ ok: false, error: 'WEB_ONLY' }),
@@ -46,6 +43,7 @@ const webFallback = {
   pickApk: async () => ({ ok: false, error: 'WEB_ONLY' }),
   installApkFromUrl: async () => ({ ok: false, error: 'WEB_ONLY' }),
   vmInstall: async () => ({ ok: false, error: 'WEB_ONLY' }),
+  vmRegisterInstalled: async () => ({ ok: false, error: 'WEB_ONLY' }),
   vmLaunch: async () => ({ ok: false, error: 'WEB_ONLY' }),
   vmStopApp: async () => ({ ok: false, error: 'WEB_ONLY' }),
   vmDaemon: async () => ({ ok: false, error: 'WEB_ONLY' }),
@@ -68,19 +66,11 @@ const native = {
   ping: () => call('ping'),
   getLastCrash: () => call('getLastCrash'),
   clearLastCrash: () => call('clearLastCrash'),
-  hasOverlayPermission: async () => {
-    if (!Capacitor.isNativePlatform()) return { granted: true, native: false }
-    const res = await call('hasOverlayPermission')
-    return { ...res, granted: res?.granted === true }
-  },
-  requestOverlayPermission: () => call('requestOverlayPermission'),
-  startFloating: options => call('startFloating', options || {}),
-  stopFloating: () => call('stopFloating'),
   startSession: options => call('startSession', options || {}),
   stopSession: () => call('stopSession'),
-  isFloatingActive: async () => {
-    const res = await call('isFloatingActive')
-    return { ...res, active: res?.active === true, sessionActive: res?.sessionActive === true }
+  isInGameHudActive: async () => {
+    const res = await call('isInGameHudActive')
+    return { ...res, active: res?.active === true, inWindow: res?.inWindow === true, sessionActive: res?.sessionActive === true }
   },
   getSessionStatus: async () => {
     const res = await call('getSessionStatus')
@@ -100,6 +90,7 @@ const native = {
   requestNotificationPermission: async () => { const r = await call('requestNotificationPermission'); return { ...r, granted: r?.granted === true } },
   hasUsageAccess: async () => { const r = await call('hasUsageAccess'); return { ...r, granted: r?.granted === true } },
   requestUsageAccess: () => call('requestUsageAccess'),
+  discoverGame: packageName => call('discoverGame', { packageName: String(packageName || '') }),
   vmStatus: () => call('vmStatus'),
   vmSessionWatch: () => call('vmSessionWatch'),
   setOverlayLines: specs => call('setOverlayLines', { json: typeof specs === 'string' ? specs : JSON.stringify(specs || {}) }),
@@ -128,6 +119,7 @@ const native = {
   pickApk: () => call('pickApk'),
   installApkFromUrl: url => call('installApkFromUrl', { url: String(url || '') }),
   vmInstall: apkPath => call('vmInstall', { apkPath: String(apkPath || '') }),
+  vmRegisterInstalled: packageName => call('vmRegisterInstalled', { packageName: String(packageName || '') }),
   vmLaunch: (packageName, activityName) => call('vmLaunch', {
     packageName: String(packageName || ''),
     activityName: String(activityName || '')

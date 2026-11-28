@@ -1,27 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import ModMenu from '../components/ModMenu.jsx'
-import { SnakeMark } from '../components/SnakeLogo.jsx'
+import SnakeLogo, { SnakeMark } from '../components/SnakeLogo.jsx'
 import Icon from '../components/Icons.jsx'
-import snakeLogo from '../assets/snake-lockup.png'
-import { GAME_PACKAGES, SUPPORTED_GAMES, TARGET_BUILD } from '../lib/config.js'
-
-function GameCard({ game, onLaunch }) {
-  const target = game.id === 'eightBallPool'
-  return (
-    <button className={`sg-card ${target ? 'target' : 'locked'}`} onClick={() => onLaunch(game.packageName)}>
-      <span className={`sg-art sg-art-${game.id}`}>
-        <span className="sg-art-mark">{target ? '8' : game.name.charAt(0)}</span>
-        {target ? <span className="sg-version">{TARGET_BUILD}</span> : (
-          <span className="sg-warning"><Icon name="warning" size={20} /></span>
-        )}
-      </span>
-      <span className="sg-copy">
-        <b>{game.name}</b>
-        <small>{target ? 'Main client · ready' : 'Launcher only'}</small>
-      </span>
-    </button>
-  )
-}
+import { GAME_PACKAGES, TARGET_BUILD } from '../lib/config.js'
 
 export default function Home({
   config,
@@ -52,13 +33,13 @@ export default function Home({
   onStartSession,
   onStop,
   onOpenTable,
-  onRequestOverlay,
   onRequestNotifications,
   onRequestUsageAccess,
   onRunQuickTest
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const status = sessionStatus?.text || (config.autoPlay ? 'AUTO PLAY' : 'READY')
+  const sessionOn = nativeStatus?.sessionActive === true
 
   useEffect(() => {
     if (menuSignal > 0) setMenuOpen(true)
@@ -90,12 +71,13 @@ export default function Home({
 
       <section className="sg-hero">
         <div className="sg-hero-copy">
-          <span className="sg-hero-kicker">BEST FOR 8 BALL POOL</span>
-          <img className="sg-hero-logo" src={snakeLogo} alt="SNAKE ENGINE" />
-          <p>Rootless session client · target {TARGET_BUILD}</p>
+          <span className="sg-hero-kicker">LOCAL SESSION CLIENT</span>
+          <SnakeLogo className="sg-hero-logo" />
+          <p>Opens the installed 8 Ball Pool inside the client · no key · no server</p>
           <button className="sg-hero-btn" onClick={() => onStartSession(GAME_PACKAGES.eightBallPool)}>
             <Icon name="play" size={16} /> START SESSION
           </button>
+          <span className="sg-hero-note">LOCAL PREVIEW · SIMULATED</span>
         </div>
         <div className="sg-hero-balls" aria-hidden="true">
           <span className="sg-ball sg-ball-8">8</span>
@@ -104,42 +86,30 @@ export default function Home({
         </div>
       </section>
 
-      <div className="sg-section-head">
-        <span className="sg-section-plus"><Icon name="plus" size={16} /></span>
-        <b>Supported Games</b>
-        <i>{SUPPORTED_GAMES.length}</i>
-      </div>
-
-      <section className="sg-games">
-        {SUPPORTED_GAMES.map(game => (
-          <GameCard key={game.id} game={game} onLaunch={onStartSession} />
-        ))}
-      </section>
-
-      <section className="sg-actions">
-        <button className="sg-action primary" onClick={() => onStartSession(GAME_PACKAGES.eightBallPool)}>
-          <b>START</b><small>SESSION + 8BP</small>
+      <section className="sg-quick">
+        <button className="sg-quick-card" onClick={() => onStartSession(GAME_PACKAGES.eightBallPool)}>
+          <b>8 BALL POOL</b>
+          <small>{TARGET_BUILD} · installed Play Store build</small>
         </button>
-        <button className="sg-action" onClick={onRunQuickTest}>
-          <b>TEST</b><small>NO BLOCK</small>
+        <button className="sg-quick-card" onClick={onRunQuickTest}>
+          <b>QUICK TEST</b>
+          <small>{testReport?.ok ? 'PASS' : testReport?.items?.length ? 'CHECK REPORT' : 'NON-BLOCKING'}</small>
         </button>
-        <button className="sg-action" onClick={() => setMenuOpen(true)}>
-          <b>MENU</b><small>MOD MENU</small>
-        </button>
-        <button className="sg-action danger" onClick={onStop}>
-          <b>STOP</b><small>SESSION</small>
+        <button className="sg-quick-card" onClick={() => setMenuOpen(true)}>
+          <b>MOD MENU</b>
+          <small>Lines · auto play · auto queue</small>
         </button>
       </section>
 
       <div className="sg-status-line">
-        <span><i className={`sg-dot ${nativeStatus?.sessionActive ? 'on' : ''}`} /> {status}</span>
+        <span><i className={`sg-dot ${sessionOn ? 'on' : ''}`} /> {status}</span>
         <span>AUTO {config.autoPlay ? 'ON' : 'OFF'}</span>
         <span>TEST {testReport?.ok ? 'PASS' : testReport?.items?.length ? 'FAIL' : 'IDLE'}</span>
       </div>
 
       <nav className="sg-nav">
         <button className="active" onClick={() => setMenuOpen(false)}>
-          <Icon name="grid" size={22} /><span>Games</span>
+          <Icon name="grid" size={22} /><span>Home</span>
         </button>
         <button onClick={() => setMenuOpen(true)}>
           <Icon name="menu" size={22} /><span>Menu</span>

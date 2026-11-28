@@ -38,7 +38,7 @@ function Main() {
   const [inputInfo, setInputInfo] = useState(null)
   const [autoLive, setAutoLive] = useState(false)
   const [autoLiveInfo, setAutoLiveInfo] = useState(null)
-  const [nativeStatus, setNativeStatus] = useState({ overlay: false, floating: false, native: native.isNative(), sessionActive: false })
+  const [nativeStatus, setNativeStatus] = useState({ inWindow: false, systemOverlay: false, native: native.isNative(), sessionActive: false })
   const [menuSignal, setMenuSignal] = useState(0)
   const [menuCloseSignal, setMenuCloseSignal] = useState(0)
   const [toast, setToast] = useState('')
@@ -115,9 +115,12 @@ function Main() {
       step = 'Native bridge'
       const ping = await native.ping()
       add('Native bridge', ping?.ok !== false || !native.isNative(), native.isNative() ? (ping?.ok ? 'pong' : 'unavailable') : 'web mode')
-      step = 'Overlay permission'
-      const overlay = await native.hasOverlayPermission()
-      add('Overlay permission', overlay?.granted === true || !native.isNative(), overlay?.granted ? 'granted' : 'pending until granted', 'device')
+      step = 'Installed game discovery'
+      const discovery = await native.discoverGame(GAME_PACKAGES.eightBallPool)
+      add('Installed game discovery', discovery?.installed === true || !native.isNative(),
+        native.isNative()
+          ? (discovery?.installed ? `${discovery.versionName || '?'} · ${discovery.splitCount || 0} splits · ${discovery.launchActivity || 'no activity'}` : (discovery?.reason || discovery?.error || 'not installed'))
+          : 'web mode')
       step = 'Notification permission'
       const notif = await native.hasNotificationPermission()
       add('Notification permission', notif?.granted === true || !native.isNative(), notif?.granted ? 'granted' : 'pending until granted', 'device')
@@ -493,40 +496,43 @@ function Main() {
         if (asked?.granted !== true) say('Notification permission not granted · session status will be limited', 'starting')
       }
     }
-    const perm = await native.hasOverlayPermission()
-    if (!perm.granted) {
-      await native.requestOverlayPermission()
-      say('Enable Display over other apps for session overlay, then tap Launch again', 'error')
-      return { ok: false, error: 'OVERLAY_PERMISSION_REQUIRED' }
+    // No screen capture, no key, no server and no system overlay. Discover the
+    // Play Store build by PackageManager, register its paths read-only, then
+    // try to start the real game Activity inside our hosted window.
+    const discovery = await native.discoverGame(pkg).catch(e => ({ ok: false, error: String(e?.message || e) }))
+    if (native.isNative() && discovery?.installed !== true) {
+      say(`${game?.name || pkg} not installed: ${discovery?.reason || discovery?.error || 'unknown'}`, 'error')
+      return { ok: false, error: 'GAME_NOT_INSTALLED' }
     }
-    // No screen capture is used. Snake Engine hosts games in its own VM; this
-    // build only starts the session overlay and opens the real game.
+    await native.vmRegisterInstalled(pkg).catch(() => {})
+    await native.vmAttach().catch(() => {})
+
     const session = await native.startSession({ packageName: pkg, launchGame: false })
       .catch(e => ({ ok: false, error: String(e?.message || e) }))
-    if (session?.ok) {
-      setConfigState(prev => ({ ...prev, sessionActive: true }))
-      const launch = await native.launchGame(pkg)
-      say(launch?.ok
-        ? `Session active · ${game?.name || pkg}`
-        : `Session active · game launch failed (${launch?.error || 'unknown'})`,
-      launch?.ok ? 'running' : 'error')
+    if (session?.ok) setConfigState(prev => ({ ...prev, sessionActive: true }))
+
+    let hosted = null
+    if (native.isNative()) {
+      hosted = await native.vmLaunch(pkg, discovery?.launchActivity || '').catch(() => ({ ok: false }))
+    }
+    if (hosted?.ok && hosted?.started === true) {
+      say(`Hosted ${game?.name || pkg} · in-window controls active`, 'running')
       await refreshNativeStatus()
       if (config.runTestOnLaunch) runQuickTest('launch').catch(() => {})
-      return { ...session, launched: launch?.ok === true }
+      return { ...session, hosted: true, launched: true, discovery }
     }
-    // Fallback: launch without overlay session
-    const launch = await native.launchGame(pkg)
-    if (launch?.ok) say(`Opened ${game?.name || pkg} (no overlay session)`, 'ready')
-    else say(`Launch failed: ${session?.error || launch?.error || 'unknown'}`, 'error')
-    await refreshNativeStatus()
-    return launch
-  }
 
-  const requestOverlay = async () => {
-    const current = await native.hasOverlayPermission()
-    if (current.granted) return say('Overlay permission already granted', 'ready')
-    await native.requestOverlayPermission()
-    say('Enable Display over other apps, then return', 'starting')
+    // Honest fallback: the real installed game still opens through this client,
+    // but we do not claim an in-window game when the framework hook is not ready.
+    const launch = await native.launchGame(pkg)
+    const reason = hosted?.reason || hosted?.state || session?.error || launch?.error || 'unknown'
+    say(launch?.ok
+      ? `Session active · ${game?.name || pkg} launched externally (hosted: ${reason})`
+      : `Launch failed: ${reason}`,
+    launch?.ok ? 'ready' : 'error')
+    await refreshNativeStatus()
+    if (session?.ok && config.runTestOnLaunch) runQuickTest('launch').catch(() => {})
+    return { ...launch, hosted: false, discovery, reason }
   }
 
   const requestNotifications = async () => {
@@ -565,17 +571,16 @@ function Main() {
   }
 
   const refreshNativeStatus = async () => {
-    const [overlay, floating, session, notif, usage] = await Promise.all([
-      native.hasOverlayPermission(),
-      native.isFloatingActive(),
+    const [hud, session, notif, usage] = await Promise.all([
+      native.isInGameHudActive(),
       native.getSessionStatus(),
       native.hasNotificationPermission(),
       native.hasUsageAccess()
     ])
     setNativeStatus({
-      overlay: overlay.granted === true,
-      floating: floating.active === true,
-      sessionActive: session.sessionActive === true || floating.active === true,
+      inWindow: hud.inWindow === true,
+      systemOverlay: false,
+      sessionActive: session.sessionActive === true || hud.active === true,
       notifications: notif.granted === true,
       usageAccess: usage.granted === true,
       native: native.isNative()
@@ -818,7 +823,6 @@ function Main() {
       onStartSession={startSession}
       onStop={handleStop}
       onOpenTable={() => setTab('table')}
-      onRequestOverlay={requestOverlay}
       onRequestNotifications={requestNotifications}
       onRequestUsageAccess={requestUsage}
       onRunQuickTest={runQuickTest}
@@ -861,7 +865,6 @@ function Main() {
       scriptLog={scriptLog}
       onClearLog={() => setScriptLog([])}
       onStartSession={startSession}
-      onRequestOverlay={requestOverlay}
       onRequestNotifications={requestNotifications}
       onRequestUsageAccess={requestUsage}
       onStopSession={stopSession}

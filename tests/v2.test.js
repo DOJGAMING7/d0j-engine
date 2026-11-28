@@ -18,7 +18,8 @@ test('APK PASS uses a salted hash and accepts only the private key', async () =>
 })
 
 test('v2 config contains the reference feature names', () => {
-  assert.equal(DEFAULT_CONFIG.autoPlayMode, 'Pro Fast')
+  assert.equal(DEFAULT_CONFIG.autoPlayMode, 'Pro Player')
+  assert.equal(DEFAULT_CONFIG.mode, 'Human')
   assert.equal(DEFAULT_CONFIG.showLines, true)
   assert.equal(DEFAULT_CONFIG.keepLines, true)
   assert.equal(DEFAULT_CONFIG.powerLock, false)
@@ -58,45 +59,54 @@ test('mod menu keeps core cheats and clean session labels', () => {
   assert.ok(!source.includes('Purchase guard'), 'purchase guard UI should be removed')
 })
 
-test('home screen has supported games and 8BP redirect target', () => {
+test('home screen is clean and starts the installed 8BP session', () => {
   const source = read('src/screens/Home.jsx') + read('src/lib/config.js')
-  for (const label of ['Supported Games', '8 BALL POOL', 'CARROM POOL', 'SOCCER STARS']) {
+  const logo = read('src/components/SnakeLogo.jsx')
+  for (const label of ['START SESSION', '8 BALL POOL', 'MOD MENU', 'QUICK TEST',
+    'SnakeLogo', 'LOCAL PREVIEW · SIMULATED']) {
     assert.ok(source.includes(label), `missing home label: ${label}`)
   }
-  const config = read('src/lib/config.js')
-  assert.ok(config.includes("eightBallPool: 'com.miniclip.eightballpool'"))
+  assert.ok(logo.includes('snake-lockup.png'), 'official lockup must be used everywhere')
+  for (const removed of ['Buy Now', 'Get Subscription', 'Purchase guard', 'Support chat', 'User ID', 'Balance']) {
+    assert.ok(!source.includes(removed), `home must not show ${removed}`)
+  }
+  assert.ok(source.includes('onStartSession(GAME_PACKAGES.eightBallPool)'))
+  assert.ok(source.includes("eightBallPool: 'com.miniclip.eightballpool'"))
 })
 
-test('native Android layer declares session overlay without accessibility guard', () => {
+test('native Android layer declares notification-only session without overlay', () => {
   const manifest = read('android/app/src/main/AndroidManifest.xml')
-  assert.ok(manifest.includes('android.permission.SYSTEM_ALERT_WINDOW'))
   assert.ok(manifest.includes('android.permission.POST_NOTIFICATIONS'))
-  assert.ok(manifest.includes('D0JOverlayService'))
+  assert.ok(manifest.includes('.D0JSessionService'))
+  assert.ok(!manifest.includes('SYSTEM_ALERT_WINDOW'))
+  assert.ok(!manifest.includes('D0JOverlayService'))
   assert.ok(!manifest.includes('D0JGuardService'))
   assert.ok(!manifest.includes('BIND_ACCESSIBILITY_SERVICE'))
+  assert.ok(!manifest.includes('mediaProjection'))
   assert.ok(manifest.includes('com.miniclip.eightballpool'))
   assert.ok(manifest.includes('foregroundServiceType="specialUse"'))
 
-  const overlay = read('android/app/src/main/java/com/d0j/engine/D0JOverlayService.java')
-  assert.ok(overlay.includes('TYPE_APPLICATION_OVERLAY'))
-  assert.ok(overlay.includes('ACTION_START_SESSION'))
-  assert.ok(overlay.includes('ACTION_STOP_SESSION'))
-  assert.ok(overlay.includes('ACTION_UPDATE_STATUS'))
-  assert.ok(overlay.includes('stopSessionInternal'))
+  const service = read('android/app/src/main/java/com/d0j/engine/D0JSessionService.java')
+  assert.ok(service.includes('ACTION_START_SESSION'))
+  assert.ok(service.includes('ACTION_STOP_SESSION'))
+  assert.ok(service.includes('ACTION_UPDATE_STATUS'))
+  assert.ok(service.includes('stopSessionInternal'))
+  assert.ok(service.includes('SNAKE ENGINE is running in background'))
+  assert.ok(!service.includes('TYPE_APPLICATION_OVERLAY'))
 })
 
-test('all-line prediction is wired into the client and floating menu', () => {
+test('all-line prediction is wired into the client and in-window menu', () => {
   const app = read('src/App.jsx')
   const table = read('src/screens/TableDemo.jsx')
-  const overlay = read('android/app/src/main/java/com/d0j/engine/D0JOverlayService.java')
+  const hud = read('android/app/src/main/java/com/d0j/engine/D0JGameHud.java')
 
-  assert.ok(app.includes("command === 'runLineTest'"), 'overlay line command is not handled')
+  assert.ok(app.includes("command === 'runLineTest'"), 'line command is not handled')
   assert.ok(app.includes('onRunLineScript={runLineTest}'), 'table screen cannot run the script')
   assert.ok(app.includes("if (!overlayMode && report?.ok) setTab('table')"), 'client does not open the table after the script')
   assert.ok(app.includes('native.requestNotificationPermission()'), 'session start does not request notification permission')
   assert.ok(table.includes('state.lines'), 'table screen does not render stored lines')
   assert.ok(table.includes('RUN ALL LINES'), 'table screen has no all-line action')
-  assert.ok(overlay.includes('Run All Prediction Lines'), 'floating menu still shows the old 3-shot action')
+  assert.ok(hud.includes('RUN ALL PREDICTION LINES'), 'in-window menu still shows the old 3-shot action')
 })
 
 test('script manifest hashes match shipped scripts', () => {
@@ -140,11 +150,11 @@ test('D0JNative is registered before the Capacitor bridge is created', () => {
   assert.ok(plugin.includes('if (options == null) options = call.getData();'))
 })
 
-test('release version is bumped to 2.1.1', () => {
+test('release version is bumped to 2.1.2', () => {
   const pkg = JSON.parse(read('package.json'))
-  assert.equal(pkg.version, '2.1.1')
+  assert.equal(pkg.version, '2.1.2')
 
   const gradle = read('android/app/build.gradle')
-  assert.ok(gradle.includes('versionCode 7'))
-  assert.ok(gradle.includes('versionName "2.1.1"'))
+  assert.ok(gradle.includes('versionCode 8'))
+  assert.ok(gradle.includes('versionName "2.1.2"'))
 })

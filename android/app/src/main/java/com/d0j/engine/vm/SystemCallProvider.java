@@ -45,7 +45,9 @@ public class SystemCallProvider extends ContentProvider {
         if (op == null) op = "status";
         try {
             VMCore core = VMCore.get(getContext());
-            if ("status".equals(op)) {
+            if ("discover".equals(op)) {
+                putJson(out, core.discoverInstalled(args.getString("packageName", "")));
+            } else if ("status".equals(op)) {
                 putJson(out, core.status());
             } else if ("list".equals(op)) {
                 JSONObject listing = new JSONObject();
@@ -53,6 +55,8 @@ public class SystemCallProvider extends ContentProvider {
                 putJson(out, listing);
             } else if ("install".equals(op)) {
                 putJson(out, core.install(args.getString("apkPath", "")).toJson());
+            } else if ("registerInstalled".equals(op)) {
+                putJson(out, core.registerInstalled(args.getString("packageName", "")).toJson());
             } else if ("launch".equals(op)) {
                 putJson(out, core.launch(args.getString("packageName", ""), args.getString("activityName", "")));
             } else if ("stop".equals(op)) {

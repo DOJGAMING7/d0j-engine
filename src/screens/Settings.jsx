@@ -39,7 +39,6 @@ export default function Settings({
   scriptLog,
   onClearLog,
   onStartSession,
-  onRequestOverlay,
   onRequestNotifications,
   onRequestUsageAccess,
   onStopSession,
@@ -242,14 +241,14 @@ export default function Settings({
       <div className="settings-body">
         <section className="panel">
           <h2>SESSION / NATIVE</h2>
-          <p>Session-scoped overlay. No Accessibility, no purchase guard (A1). Overlay permission is requested only for game session.</p>
+          <p>In-window controls inside the hosted game. No system overlay, no Accessibility, no purchase guard (A1).</p>
           <div className="script-row">
             <div><b>Start 8BP session</b><small>{GAME_PACKAGES.eightBallPool} · {TARGET_BUILD}</small></div>
             <button className="btn primary" onClick={() => onStartSession(GAME_PACKAGES.eightBallPool)}>Start</button>
           </div>
           <div className="script-row">
-            <div><b>Overlay permission</b><small>{nativeStatus?.overlay ? 'GRANTED' : 'Not granted'}</small></div>
-            <button className="btn ghost" onClick={onRequestOverlay}>Open</button>
+            <div><b>In-window controls</b><small>{nativeStatus?.inWindow ? 'Active in hosted game' : 'Inactive'}</small></div>
+            <button className="btn ghost" onClick={() => onStartSession(GAME_PACKAGES.eightBallPool)}>Open</button>
           </div>
           <div className="script-row">
             <div><b>Notification permission</b><small>{nativeStatus?.notifications ? 'GRANTED' : 'Not granted'}</small></div>
@@ -372,10 +371,10 @@ export default function Settings({
         </section>
 
         <section className="panel">
-          <h2>Live Overlay Lines · step 5</h2>
-          <p>Local simulated preview drawn through the session overlay. No screen capture or projection permission is used. Real game lines need the native VM engine.</p>
+          <h2>In-Window Lines · step 5</h2>
+          <p>Local simulated preview drawn inside the hosted game window. No screen capture or projection permission is used. Real game lines need measured VM state.</p>
           <div className="script-row">
-            <div><b>Overlay</b><small>{liveOverlay ? 'running' : 'off'} · no screen capture · {liveOverlayInfo?.ok ? `${liveOverlayInfo.balls} balls · ${liveOverlayInfo.source}${liveOverlayInfo.simulated ? ' (simulated)' : ''}` : (liveOverlayInfo?.reason || 'idle')}</small></div>
+            <div><b>Lines</b><small>{liveOverlay ? 'running' : 'off'} · no screen capture · {liveOverlayInfo?.ok ? `${liveOverlayInfo.balls} balls · ${liveOverlayInfo.source}${liveOverlayInfo.simulated ? ' (simulated)' : ''}` : (liveOverlayInfo?.reason || 'idle')}</small></div>
             <button className={`btn ${liveOverlay ? 'ghost' : 'primary'}`} onClick={liveOverlay ? onStopLiveOverlay : onStartLiveOverlay}>
               {liveOverlay ? 'Stop Live Lines' : 'Start Live Lines'}
             </button>
@@ -420,7 +419,7 @@ export default function Settings({
 
         <section className="panel">
           <h2>Session Guard · step 7</h2>
-          <p>Overlay and live lines stop when the session closes or the hosted game exits. Exit detection uses activity lifecycle reports from the hosted process, or Usage access if you grant it — never Accessibility.</p>
+          <p>In-window controls and lines stop when the session closes or the hosted game exits. Exit detection uses activity lifecycle reports from the hosted process, or Usage access if you grant it — never Accessibility.</p>
           <div className="script-row">
             <div>
               <b>{guardInfo?.verdict || 'UNKNOWN'}</b>
@@ -497,7 +496,7 @@ export default function Settings({
           <h2>Build Info / Limits</h2>
           <div className="meta-line">SNAKE ENGINE · private single-user build</div>
           <div className="meta-line">A1: No Accessibility, no purchase guard, no auto-back.</div>
-          <div className="meta-line">2B fallback: session-scoped overlay permission only when game session starts.</div>
+          <div className="meta-line">2B: in-window controls only; no SYSTEM_ALERT_WINDOW, no MediaProjection, no VPN.</div>
           <div className="meta-line">Live lines: on-device screen reading during an active session. Demo table stays local/simulated.</div>
         </section>
       </div>

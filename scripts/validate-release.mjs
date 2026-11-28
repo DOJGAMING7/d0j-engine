@@ -95,7 +95,7 @@ export function validateJava(root = ROOT) {
     join(root, 'android', 'app', 'src', 'main', 'java', 'com', 'd0j', 'engine', 'vm')
   ]
   const required = [
-    'D0JNativePlugin.java', 'D0JOverlayService.java', 'D0JLineLayer.java',
+    'D0JNativePlugin.java', 'D0JSessionService.java', 'D0JGameHud.java', 'D0JLineLayer.java',
     'SystemCallProvider.java', 'VMLifecycleMonitor.java', 'VMActivityInputInjector.java',
     'VMInputProvider.java', 'VMMemoryProvider.java', 'VMProcMemoryReader.java'
   ]
@@ -113,26 +113,38 @@ export function validateJava(root = ROOT) {
   const unbalanced = sources.filter(source => !source.balanced).map(source => source.name)
   const all = sources.map(source => readText(source.path)).join('\n')
   const accessibility = /AccessibilityService|BIND_ACCESSIBILITY_SERVICE|android\.accessibilityservice/i.test(all)
-  const symbols = ['vmInputPath', 'sessionWatch', 'ACTION_UPDATE_LINES', 'inputTap', 'hostActivity']
+  const symbols = ['vmInputPath', 'sessionWatch', 'ACTION_UPDATE_LINES', 'inputTap', 'hostActivity', 'D0JGameHud', 'ACTION_LINES']
     .filter(symbol => !all.includes(symbol))
-  const ok = missing.length === 0 && unbalanced.length === 0 && !accessibility && symbols.length === 0
+  const forbidden = [
+    'Settings.canDrawOverlays',
+    'TYPE_APPLICATION_OVERLAY',
+    'createScreenCaptureIntent',
+    'getMediaProjection',
+    'extends VpnService',
+    'AccessibilityService',
+    'BIND_ACCESSIBILITY_SERVICE'
+  ].filter(token => all.includes(token))
+  const ok = missing.length === 0 && unbalanced.length === 0 && !accessibility
+    && symbols.length === 0 && forbidden.length === 0
   return {
     ok,
-    detail: ok ? `${sources.length} Java sources balanced, no accessibility declarations`
-      : `missing=${missing.join(',')} unbalanced=${unbalanced.join(',')} accessibility=${accessibility} symbols=${symbols.join(',')}`,
+    detail: ok ? `${sources.length} Java sources balanced, in-window HUD, no overlay/capture/VPN/accessibility`
+      : `missing=${missing.join(',')} unbalanced=${unbalanced.join(',')} accessibility=${accessibility} symbols=${symbols.join(',')} forbidden=${forbidden.join(',')}`,
     files: sources.length,
     missing,
     unbalanced,
     accessibility,
-    symbols
+    symbols,
+    forbidden
   }
 }
 
 export function validateManifest(root = ROOT) {
   const manifest = readText(join(root, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'))
   const required = [
-    'SYSTEM_ALERT_WINDOW', '.D0JOverlayService', '.vm.VMDaemonService',
-    '.vm.SystemCallProvider', 'android.permission.POST_NOTIFICATIONS'
+    '.D0JSessionService', '.vm.VMDaemonService', '.vm.SystemCallProvider',
+    'android.permission.POST_NOTIFICATIONS', 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
+    'com.miniclip.eightballpool'
   ]
   const missing = required.filter(token => !manifest.includes(token))
   for (let i = 0; i < 4; i++) {
@@ -142,9 +154,15 @@ export function validateManifest(root = ROOT) {
     }
     if (!manifest.includes(`android:process=":p${i}"`)) missing.push(`:p${i}`)
   }
-  const forbidden = /android\.accessibilityservice|BIND_ACCESSIBILITY_SERVICE/i.test(manifest)
+  const forbidden = /android\.accessibilityservice|BIND_ACCESSIBILITY_SERVICE|SYSTEM_ALERT_WINDOW|MEDIA_PROJECTION|foregroundServiceType="mediaProjection"|vpnService/i.test(manifest)
   const ok = missing.length === 0 && !forbidden
-  return { ok, detail: ok ? 'daemon, 4 child processes, mem/input providers, overlay declared' : `missing=${missing.join(',')} forbidden=${forbidden}`, missing, forbidden }
+  return {
+    ok,
+    detail: ok ? 'daemon, 4 child processes, mem/input providers, notification-only session declared'
+      : `missing=${missing.join(',')} forbidden=${forbidden}`,
+    missing,
+    forbidden
+  }
 }
 
 export function validateBindings(root = ROOT) {
@@ -170,6 +188,50 @@ export function validateBindings(root = ROOT) {
   }
 }
 
+/** Offline-only guarantee: scripts are bundled, never downloaded, and no key is required. */
+export function validateOffline(root = ROOT) {
+  const manifest = JSON.parse(readText(join(root, 'scripts', 'index.json')))
+  const byId = Object.fromEntries((manifest.scripts || []).map(entry => [entry.id, entry]))
+  const expectedPredictionHash = 'a3f3ae3b8ff6d1ebf6a9da41b8d1304878d1cd95f166e948dde57f72eed811eb'
+  const prediction = byId['prediction-lines']
+  const bundled = (manifest.scripts || []).every(entry => {
+    const file = String(entry.file).replace(/^scripts\//, '')
+    const path = join(root, 'scripts', file)
+    return exists(path) && sha256(readFileSync(path)) === entry.hash
+  })
+  const runner = readText(join(root, 'src', 'lib', 'scriptRunner.js'))
+  const app = readText(join(root, 'src', 'App.jsx'))
+  const nativeJs = readText(join(root, 'src', 'lib', 'native.js'))
+  const plugin = readText(join(root, 'android', 'app', 'src', 'main', 'java', 'com', 'd0j', 'engine', 'D0JNativePlugin.java'))
+  const manifestXml = readText(join(root, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'))
+
+  const failures = []
+  if (!bundled) failures.push('bundled script hashes do not match scripts/index.json')
+  if (!prediction || prediction.hash !== expectedPredictionHash) failures.push('prediction script hash changed')
+  if (!runner.includes('remote script source blocked')) failures.push('script runner accepts a remote base')
+  if (/https?:\/\//.test(app.replace(/\/\/.*$/gm, '')) || /https?:\/\//.test(nativeJs.replace(/\/\/.*$/gm, ''))) {
+    failures.push('runtime script bridge references a remote URL')
+  }
+  if (/keyServer|licenseKey|requireKey|activateKey|sendKey/i.test(app + nativeJs + plugin)) {
+    failures.push('key/server gate found in runtime code')
+  }
+  if (/SYSTEM_ALERT_WINDOW|TYPE_APPLICATION_OVERLAY|MEDIA_PROJECTION|vpnService/i.test(manifestXml)) {
+    failures.push('forbidden system permission declared')
+  }
+  if (/createScreenCaptureIntent|getMediaProjection|Settings\.canDrawOverlays/.test(plugin)) {
+    failures.push('capture/overlay API used in native bridge')
+  }
+
+  return {
+    ok: failures.length === 0,
+    detail: failures.length ? failures.join(' | ')
+      : `${(manifest.scripts || []).length} scripts bundled byte-identical; local-only runner; no key gate; no overlay/capture/VPN`,
+    bundled,
+    predictionHash: prediction ? prediction.hash : null,
+    failures
+  }
+}
+
 export function validateVersionMatrix(root = ROOT) {
   const runtime = readText(join(root, 'android', 'app', 'src', 'main', 'java', 'com', 'd0j', 'engine', 'vm', 'VMRuntime.java'))
   const hookVerified = !runtime.includes('FRAMEWORK_HOOK_NOT_ATTACHED')
@@ -192,16 +254,17 @@ export function validateVersionMatrix(root = ROOT) {
 }
 
 export const DEVICE_CHECKLIST = [
-  'Install the unsigned debug APK on a real Android device (no root required).',
-  'Grant overlay and notification permission from inside the active session only.',
-  'Start session and confirm 8BP launches into a hosted :p0..:p3 process.',
+  'Install the signed APK over v24+ using the stable key (no root required).',
+  'Grant notification permission; confirm no Display-over-other-apps or VPN prompt appears.',
+  'Start session and confirm the installed Play Store 8BP opens through this client.',
+  'Confirm the floating icon and menu appear only inside the hosted game window.',
   'VM status must report HOOK_ATTACHED, not STUB_ONLY.',
   'Capture state with probe/diff and save measured bindings for com.miniclip.eightballpool 56.34.0 (code 4064) only.',
   'Bindings status must become MEASURED before trusting any live line.',
   'Calibrate table rect on screen; verify cue/target/ghost/pocket lines align.',
   'Bind a hosted activity; verify inputStatus INPUT_READY before autoplay.',
   'Fire one manual shot, then one auto shot; confirm sent counter increments.',
-  'Exit the game and confirm the overlay/line layer closes within 8 seconds.',
+  'Exit the game and confirm the in-window controls and lines close within 8 seconds.',
   'Repeat for every target build; do not reuse offsets across versions.'
 ]
 
@@ -212,6 +275,7 @@ export function runValidation(root = ROOT) {
     { name: 'webAssets', ...validateWebAssets(root) },
     { name: 'java', ...validateJava(root) },
     { name: 'manifest', ...validateManifest(root) },
+    { name: 'offline', ...validateOffline(root) },
     { name: 'bindings', ...validateBindings(root) },
     { name: 'versionMatrix', ...validateVersionMatrix(root) }
   ]

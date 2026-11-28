@@ -163,8 +163,8 @@ export default function ModMenu({
         <Section title="Session" icon="target" />
         <StatusRow label="Client status" value={statusText} />
         <StatusRow label="Target" value={GAME_PACKAGES.eightBallPool} />
-        <StatusRow label="Overlay session" value={nativeStatus?.floating ? 'Active (session-scoped)' : 'Inactive'} />
-        <StatusRow label="Overlay permission" value={nativeStatus?.overlay ? 'GRANTED' : 'NOT GRANTED'} />
+        <StatusRow label="In-window controls" value={nativeStatus?.inWindow ? 'Active (hosted game window)' : 'Inactive'} />
+        <StatusRow label="System overlay" value={nativeStatus?.systemOverlay ? 'UNEXPECTED' : 'NOT USED'} />
         <Section title="Quick Actions" icon="play" />
         <div className="mm-actions">
           <button className="mm-action primary" onClick={() => onStartSession(GAME_PACKAGES.eightBallPool)}><b>LAUNCH 8BP</b><span>Session start</span></button>
@@ -229,7 +229,7 @@ export default function ModMenu({
         <div className="mm-actions">
           <button className="mm-action" disabled={runningLineScript} onClick={onRunLineScript}><b>{runningLineScript ? 'TESTING...' : 'RUN ALL LINES'}</b><span>Prediction script</span></button>
           <button className="mm-action" onClick={onOpenTable}><b>OPEN DEMO</b><span>Table test</span></button>
-          <button className="mm-action" onClick={liveOverlay ? onStopLiveOverlay : onStartLiveOverlay}><b>{liveOverlay ? 'STOP LIVE LINES' : 'START LIVE LINES'}</b><span>Overlay over game</span></button>
+          <button className="mm-action" onClick={liveOverlay ? onStopLiveOverlay : onStartLiveOverlay}><b>{liveOverlay ? 'STOP LIVE LINES' : 'START LIVE LINES'}</b><span>In-window preview</span></button>
         </div>
         <div className="mm-note">Local preview: {liveOverlay ? (liveOverlayInfo?.ok ? `${liveOverlayInfo.balls} balls · ${liveOverlayInfo.source}${liveOverlayInfo.simulated ? ' (simulated)' : ''}` : (liveOverlayInfo?.reason || 'idle')) : 'off'} · no screen capture. Real game lines require the native VM engine.</div>
       </>

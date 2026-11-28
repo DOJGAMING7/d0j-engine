@@ -105,7 +105,7 @@ test('state operations are reachable from JS, settings and the floating menu', (
   const provider = read(vmDir + 'SystemCallProvider.java')
   const settings = read('src/screens/Settings.jsx')
   const app = read('src/App.jsx')
-  const overlay = read('android/app/src/main/java/com/d0j/engine/D0JOverlayService.java')
+  const hud = read('android/app/src/main/java/com/d0j/engine/D0JGameHud.java')
 
   for (const method of ['vmState', 'vmStateProvider', 'vmBindings', 'vmSaveBindings', 'vmProbe', 'vmAttachReader']) {
     assert.ok(nativeJs.includes(`${method}:`), `missing native.${method}`)
@@ -119,5 +119,5 @@ test('state operations are reachable from JS, settings and the floating menu', (
   assert.ok(settings.includes('Live State Probe'))
   assert.ok(app.includes('mapSnapshotToTable(res)'))
   assert.ok(app.includes("command === 'runLiveLines'"))
-  assert.ok(overlay.includes('Run Lines From State'))
+  assert.ok(hud.includes('RUN LINES FROM STATE'))
 })

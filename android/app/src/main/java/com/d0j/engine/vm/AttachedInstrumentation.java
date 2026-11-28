@@ -15,6 +15,7 @@ public final class AttachedInstrumentation implements VMInstrumentation {
         intent.setComponent(new ComponentName(context.getPackageName(), VMHookInstaller.proxyActivity(processIndex)));
         intent.putExtra("vmPackage", app.packageName);
         intent.putExtra("vmActivity", activityName);
+        intent.putExtra("processIndex", processIndex);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
             context.startActivity(intent);

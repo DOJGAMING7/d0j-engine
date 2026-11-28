@@ -19,8 +19,8 @@ export const TABLE_PROFILES = ['London', 'Moscow', 'Beijing', 'Barcelona']
 
 export const DEFAULT_CONFIG = {
   autoPlay: false,
-  autoPlayMode: 'Pro Fast',
-  mode: 'Fast',
+  autoPlayMode: 'Pro Player',
+  mode: 'Human',
   // Auto queue is intentionally hidden/removed from client UI (3A).
   autoQueue: false,
   queueMode: 'ONE',

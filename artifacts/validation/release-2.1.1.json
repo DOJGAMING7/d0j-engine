@@ -1,7 +1,7 @@
 {
   "ok": true,
   "liveReady": false,
-  "generatedAt": "2026-11-28T10:21:19.538Z",
+  "generatedAt": "2026-11-28T11:17:17.754Z",
   "version": "2.1.1",
   "checks": [
     {
@@ -85,19 +85,28 @@
     {
       "name": "java",
       "ok": true,
-      "detail": "46 Java sources balanced, no accessibility declarations",
-      "files": 46,
+      "detail": "47 Java sources balanced, in-window HUD, no overlay/capture/VPN/accessibility",
+      "files": 47,
       "missing": [],
       "unbalanced": [],
       "accessibility": false,
-      "symbols": []
+      "symbols": [],
+      "forbidden": []
     },
     {
       "name": "manifest",
       "ok": true,
-      "detail": "daemon, 4 child processes, mem/input providers, overlay declared",
+      "detail": "daemon, 4 child processes, mem/input providers, notification-only session declared",
       "missing": [],
       "forbidden": false
+    },
+    {
+      "name": "offline",
+      "ok": true,
+      "detail": "2 scripts bundled byte-identical; local-only runner; no key gate; no overlay/capture/VPN",
+      "bundled": true,
+      "predictionHash": "a3f3ae3b8ff6d1ebf6a9da41b8d1304878d1cd95f166e948dde57f72eed811eb",
+      "failures": []
     },
     {
       "name": "bindings",
@@ -180,16 +189,17 @@
     "No APK compilation or device verification is possible on this bench (no JDK/SDK/device)."
   ],
   "deviceChecklist": [
-    "Install the unsigned debug APK on a real Android device (no root required).",
-    "Grant overlay and notification permission from inside the active session only.",
-    "Start session and confirm 8BP launches into a hosted :p0..:p3 process.",
+    "Install the signed APK over v24+ using the stable key (no root required).",
+    "Grant notification permission; confirm no Display-over-other-apps or VPN prompt appears.",
+    "Start session and confirm the installed Play Store 8BP opens through this client.",
+    "Confirm the floating icon and menu appear only inside the hosted game window.",
     "VM status must report HOOK_ATTACHED, not STUB_ONLY.",
     "Capture state with probe/diff and save measured bindings for com.miniclip.eightballpool 56.34.0 (code 4064) only.",
     "Bindings status must become MEASURED before trusting any live line.",
     "Calibrate table rect on screen; verify cue/target/ghost/pocket lines align.",
     "Bind a hosted activity; verify inputStatus INPUT_READY before autoplay.",
     "Fire one manual shot, then one auto shot; confirm sent counter increments.",
-    "Exit the game and confirm the overlay/line layer closes within 8 seconds.",
+    "Exit the game and confirm the in-window controls and lines close within 8 seconds.",
     "Repeat for every target build; do not reuse offsets across versions."
   ]
 }
