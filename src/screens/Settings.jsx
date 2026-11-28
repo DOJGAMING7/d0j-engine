@@ -50,6 +50,7 @@ export default function Settings({
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [hostingMsg, setHostingMsg] = useState('')
+  const [hostingInfo, setHostingInfo] = useState(null)
   const [vmPath, setVmPath] = useState('')
   const [vmInfo, setVmInfo] = useState(null)
   const [vmApps, setVmApps] = useState([])
@@ -71,6 +72,7 @@ export default function Settings({
 
   useEffect(() => {
     native.getLastCrash().then(res => setCrashLog(res?.text || '')).catch(() => {})
+    native.vmHostingStage().then(res => setHostingInfo(res)).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -495,9 +497,12 @@ export default function Settings({
             <button className="btn ghost" onClick={async () => {
               const res = await native.vmResetHosting().catch(() => ({ ok: false }))
               setHostingMsg(res?.ok ? 'In-window hosting retry enabled' : `Reset failed: ${res?.reason || res?.error || 'unknown'}`)
+              const stage = await native.vmHostingStage().catch(() => ({ stage: '' }))
+              setHostingInfo(stage)
             }}>Reset hosting retry</button>
           </div>
           <div className="meta-line">{hostingMsg || 'Use after a hosting failure, before trying START SESSION again.'}</div>
+          <div className="meta-line">Hosting stage: {hostingInfo?.stage || 'not attempted'}{hostingInfo?.disabled ? ` · disabled (${hostingInfo?.reason || 'unknown'})` : ''}</div>
         </section>
 
         <section className="panel">

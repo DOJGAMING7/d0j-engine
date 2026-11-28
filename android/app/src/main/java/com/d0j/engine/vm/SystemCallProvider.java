@@ -67,6 +67,13 @@ public class SystemCallProvider extends ContentProvider {
                 activate(out, core, args);
             } else if ("daemon".equals(op)) {
                 daemon(out, args.getBoolean("start", true));
+            } else if ("hostingStage".equals(op)) {
+                JSONObject value = new JSONObject();
+                value.put("state", "HOSTING_STAGE_REPORTED");
+                value.put("stage", VMHosting.stage(getContext()));
+                value.put("disabled", VMHosting.isDisabled(getContext()));
+                value.put("reason", VMHosting.reason(getContext()));
+                putJson(out, value);
             } else if ("resetHosting".equals(op)) {
                 VMHosting.reset(getContext());
                 putJson(out, new JSONObject()

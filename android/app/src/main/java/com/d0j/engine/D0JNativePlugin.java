@@ -481,6 +481,11 @@ public class D0JNativePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void vmHostingStage(PluginCall call) {
+        call.resolve(vmResult(vmCall("hostingStage", new Bundle())));
+    }
+
+    @PluginMethod
     public void vmStatus(PluginCall call) {
         call.resolve(vmResult(vmCall("status", new Bundle())));
     }

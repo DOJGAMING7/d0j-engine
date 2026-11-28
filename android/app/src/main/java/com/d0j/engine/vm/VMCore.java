@@ -208,17 +208,22 @@ public final class VMCore {
         File outLibs = new File(libsDir, safe(packageName));
         mkdir(outDex);
         mkdir(outLibs);
+        String[] apkPaths;
         try {
             List<String> sources = new ArrayList<String>();
             sources.add(entry.apkPath);
             sources.addAll(entry.splitApkPaths);
-            VMNativeLibs.extract(sources.toArray(new String[0]), outLibs);
+            apkPaths = sources.toArray(new String[0]);
+            VMNativeLibs.extract(apkPaths, outLibs);
         } catch (Exception e) {
             throw new VMException("LIB_EXTRACT_FAILED", String.valueOf(e.getMessage()));
         }
         ClassLoader loader = new dalvik.system.DexClassLoader(
                 entry.apkClassPath(), outDex.getAbsolutePath(), outLibs.getAbsolutePath(), app.getClassLoader());
         loaders.put(packageName, loader);
+        // Step 2a: build game Resources and Application before any Activity is
+        // substituted. Failures are recorded as a stage, never as a live host.
+        VMGameHost.prepare(app, packageName, apkPaths, loader);
         return true;
     }
 

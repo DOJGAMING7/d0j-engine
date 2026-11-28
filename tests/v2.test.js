@@ -150,11 +150,11 @@ test('D0JNative is registered before the Capacitor bridge is created', () => {
   assert.ok(plugin.includes('if (options == null) options = call.getData();'))
 })
 
-test('release version is bumped to 2.1.3', () => {
+test('release version is bumped to 2.1.4', () => {
   const pkg = JSON.parse(read('package.json'))
-  assert.equal(pkg.version, '2.1.3')
+  assert.equal(pkg.version, '2.1.4')
 
   const gradle = read('android/app/build.gradle')
-  assert.ok(gradle.includes('versionCode 9'))
-  assert.ok(gradle.includes('versionName "2.1.3"'))
+  assert.ok(gradle.includes('versionCode 10'))
+  assert.ok(gradle.includes('versionName "2.1.4"'))
 })
