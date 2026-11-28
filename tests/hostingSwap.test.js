@@ -82,7 +82,7 @@ test('the cached Activity inflater is rebound to the game context', () => {
   assert.match(host, /cloneInContext\(this\)/)
   assert.match(host, /private static void installInflater\(Activity activity, Context gameBase\)/)
   assert.match(host, /setField\(activity, "mInflater", gameInflater\)/)
-  assert.match(host, /installInflater\(activity, gameBase\)/)
+  assert.match(host, /installInflater\(activity, themedBase\)/)
 })
 
 test('a stale host panel is removed when hosting fails', () => {

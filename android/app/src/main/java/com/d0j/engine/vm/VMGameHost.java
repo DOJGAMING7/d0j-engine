@@ -10,6 +10,7 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
+import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
 
 import java.io.PrintWriter;
@@ -126,10 +127,26 @@ public final class VMGameHost {
             setField(activity, "mBase", gameBase);
             setField(activity, "mResources", prepared.resources);
             setField(activity, "mApplication", prepared.application);
+            int themeId = resolveThemeId(prepared, activity);
+            // Window exists now, so this no longer hits the pre-attach null
+            // window. If the Activity already built a theme, this is skipped.
+            try {
+                activity.setTheme(themeId);
+                VMHosting.markStage(report, "THEME_APPLIED_POSTATTACH:" + themeId);
+            } catch (Throwable e) {
+                VMHosting.markStage(report, "THEME_POSTATTACH_SKIPPED:" + describe(e));
+            }
             // ContextThemeWrapper caches an inflater built at attach() time
-            // from our app context. Replace it or AppCompat inflates layouts
-            // against the wrong resource table.
-            try { installInflater(activity, gameBase); } catch (Throwable ignored) { }
+            // from our app context. Rebind it to a game-themed context so view
+            // constructors resolve game drawables, not our app's resources.
+            Context themedBase = themeId == 0 ? gameBase
+                    : new ContextThemeWrapper(gameBase, themeId);
+            if (prepared.context instanceof GameContext && themeId != 0) {
+                Resources.Theme gameTheme = prepared.resources.newTheme();
+                gameTheme.applyStyle(themeId, true);
+                ((GameContext) prepared.context).theme = gameTheme;
+            }
+            try { installInflater(activity, themedBase); } catch (Throwable ignored) { }
             try { installPackageInfo(activity, prepared); } catch (Throwable ignored) { }
             installTheme(activity, prepared, report);
             VMHosting.markStage(report, "ACTIVITY_CONTEXT_SWAPPED");
@@ -167,46 +184,38 @@ public final class VMGameHost {
                                               String target, Context report) {
         int theme = 0;
         try {
-            if (packageName != null) {
-                if (target != null && !target.trim().isEmpty()) {
-                    ActivityInfo info = report.getPackageManager().getActivityInfo(
-                            new ComponentName(packageName, target), 0);
-                    if (info != null) theme = info.theme;
-                }
-                if (theme == 0) {
-                    ApplicationInfo app = report.getPackageManager().getApplicationInfo(
-                            packageName, 0);
-                    if (app != null) theme = app.theme;
-                }
-            }
+            Prepared prepared = get(packageName);
+            if (prepared != null) theme = resolveThemeId(prepared, target);
         } catch (Throwable e) {
             VMHosting.markStage(report, "THEME_LOOKUP_FAIL:" + describe(e));
         }
         VMHosting.markStage(report, "THEME_ID:" + theme);
-        if (activity == null || theme == 0) {
-            VMHosting.markStage(report, "THEME_MISSING");
-            return;
-        }
-        Object originalBase = null;
+        // setTheme() before attach hits a null Window on Android 17. Resolve
+        // the id here and apply it after attach, when the Window exists.
+        VMHosting.markStage(report, theme == 0 ? "THEME_MISSING" : "THEME_DEFERRED");
+    }
+
+    private static int resolveThemeId(Prepared prepared, Activity activity) {
+        Intent intent = activity == null ? null : activity.getIntent();
+        String target = intent == null ? null : intent.getStringExtra("vmActivity");
+        return resolveThemeId(prepared, target);
+    }
+
+    private static int resolveThemeId(Prepared prepared, String target) {
+        int theme = 0;
         try {
-            originalBase = getField(activity, "mBase");
-        } catch (Throwable ignored) { }
-        try {
-            // setTheme() calls getResources() immediately. Before attach there
-            // is no base context, so supply a temporary game-aware one, then
-            // restore the original so attach() still succeeds.
-            Prepared prepared = get(packageName);
-            if (prepared != null) {
-                setField(activity, "mBase", wrap(prepared, report));
-                VMHosting.markStage(report, "THEME_TEMP_BASE_SET");
+            if (target != null && !target.trim().isEmpty()) {
+                ActivityInfo info = prepared.context.getPackageManager().getActivityInfo(
+                        new ComponentName(prepared.packageName, target), 0);
+                if (info != null) theme = info.theme;
             }
-            activity.setTheme(theme);
-            VMHosting.markStage(report, "THEME_PREATTACH_SET:" + theme);
-        } catch (Throwable e) {
-            VMHosting.markStage(report, "THEME_PREATTACH_FAIL:" + describe(e));
-        } finally {
-            try { setField(activity, "mBase", originalBase); } catch (Throwable ignored) { }
-        }
+            if (theme == 0) {
+                ApplicationInfo app = prepared.context.getPackageManager()
+                        .getApplicationInfo(prepared.packageName, 0);
+                if (app != null) theme = app.theme;
+            }
+        } catch (Throwable ignored) { }
+        return theme;
     }
 
     /** Theme work is completed before attach(); nothing is left to do here. */
