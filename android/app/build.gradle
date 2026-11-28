@@ -3,6 +3,19 @@ apply plugin: 'com.android.application'
 android {
     namespace "com.d0j.engine"
     compileSdk rootProject.ext.compileSdkVersion
+
+    // Stable signing key committed with the project. CI must not generate a
+    // new debug key on every run, or Android rejects updates as "App not installed".
+    signingConfigs {
+        debug {
+            storeFile file('d0j-debug.p12')
+            storePassword 'android'
+            keyAlias 'd0j'
+            keyPassword 'android'
+            storeType 'PKCS12'
+        }
+    }
+
     defaultConfig {
         applicationId "com.d0j.engine"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -17,9 +30,13 @@ android {
         }
     }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.debug
         }
     }
 }

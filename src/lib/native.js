@@ -42,6 +42,7 @@ const webFallback = {
   vmAttach: async () => ({ ok: false, ready: false, state: 'WEB_ONLY', reason: 'WEB_ONLY' }),
   vmList: async () => ({ ok: false, apps: [] }),
   pickApk: async () => ({ ok: false, error: 'WEB_ONLY' }),
+  installApkFromUrl: async () => ({ ok: false, error: 'WEB_ONLY' }),
   vmInstall: async () => ({ ok: false, error: 'WEB_ONLY' }),
   vmLaunch: async () => ({ ok: false, error: 'WEB_ONLY' }),
   vmStopApp: async () => ({ ok: false, error: 'WEB_ONLY' }),
@@ -121,6 +122,7 @@ const native = {
   vmAttach: () => call('vmAttach'),
   vmList: () => call('vmList'),
   pickApk: () => call('pickApk'),
+  installApkFromUrl: url => call('installApkFromUrl', { url: String(url || '') }),
   vmInstall: apkPath => call('vmInstall', { apkPath: String(apkPath || '') }),
   vmLaunch: (packageName, activityName) => call('vmLaunch', {
     packageName: String(packageName || ''),

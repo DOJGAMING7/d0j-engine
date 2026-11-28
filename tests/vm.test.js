@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
@@ -91,6 +91,34 @@ test('probe exposes real memory maps so no base address is guessed', () => {
   assert.ok(settings.includes('Show memory bases'))
   assert.ok(settings.includes('native.vmMaps()'))
   assert.ok(settings.includes('Real readable regions — select a base'))
+})
+
+test('APK is signed with a committed stable key so updates do not need uninstall', () => {
+  const gradle = read('android/app/build.gradle')
+  const manifest = read('android/app/src/main/AndroidManifest.xml')
+
+  assert.ok(gradle.includes("storeFile file('d0j-debug.p12')"))
+  assert.ok(gradle.includes('storeType \'PKCS12\''))
+  assert.ok(gradle.includes('signingConfig signingConfigs.debug'))
+  assert.ok(existsSync(resolve(root, 'android/app/d0j-debug.p12')))
+  assert.ok(manifest.includes('REQUEST_INSTALL_PACKAGES'))
+})
+
+test('one-tap APK update downloads from GitHub and relaunches after install', () => {
+  const nativeJs = read('src/lib/native.js')
+  const plugin = read('android/app/src/main/java/com/d0j/engine/D0JNativePlugin.java')
+  const settings = read('src/screens/Settings.jsx')
+  const home = read('src/screens/Home.jsx')
+
+  assert.ok(nativeJs.includes('installApkFromUrl:'))
+  assert.ok(plugin.includes('public void installApkFromUrl(PluginCall call)'))
+  assert.ok(plugin.includes('ACTION_INSTALL_PACKAGE'))
+  assert.ok(plugin.includes('handleApkInstallResult'))
+  assert.ok(plugin.includes('getLaunchIntentForPackage(getContext().getPackageName())'))
+  assert.ok(settings.includes('Download + Install + Restart'))
+  assert.ok(settings.includes('installApkFromUrl(target)'))
+  assert.ok(settings.includes('api.github.com/repos/DOJGAMING7/d0j-engine/releases'))
+  assert.ok(home.includes('onStartSession(GAME_PACKAGES.eightBallPool)'))
 })
 
 test('native bridge and Capacitor plugin expose VM calls', () => {

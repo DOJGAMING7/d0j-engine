@@ -22,6 +22,12 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.Iterator;
 
 @CapacitorPlugin(
@@ -544,6 +550,70 @@ public class D0JNativePlugin extends Plugin {
         } catch (Exception e) {
             call.reject("COPY_FAILED", String.valueOf(e.getMessage()));
         }
+    }
+
+    // Download an APK from a GitHub URL and hand it to the system installer.
+    // The user confirms once in the system dialog; the app relaunches on result.
+    @PluginMethod
+    public void installApkFromUrl(PluginCall call) {
+        String value = call.getString("url", "");
+        if (value == null || !value.startsWith("https://")) {
+            call.reject("INVALID_URL");
+            return;
+        }
+        final String url = value;
+        new Thread(() -> {
+            try {
+                HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+                connection.setInstanceFollowRedirects(true);
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(30000);
+                if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                    throw new java.io.IOException("HTTP " + connection.getResponseCode());
+                }
+                File target = new File(getContext().getCacheDir(), "d0j-update.apk");
+                try (InputStream in = connection.getInputStream();
+                     OutputStream out = new FileOutputStream(target, false)) {
+                    byte[] buffer = new byte[16384];
+                    int read;
+                    while ((read = in.read(buffer)) > 0) out.write(buffer, 0, read);
+                }
+                if (target.length() < 100000) throw new java.io.IOException("APK_TOO_SMALL");
+                Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                        getContext(), getContext().getPackageName() + ".fileprovider", target);
+                Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE)
+                        .setData(uri)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK)
+                        .putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+                        .putExtra(Intent.EXTRA_RETURN_RESULT, true);
+                getBridge().getActivity().runOnUiThread(() ->
+                        startActivityForResult(call, intent, "handleApkInstallResult"));
+            } catch (Exception e) {
+                call.reject("APK_DOWNLOAD_FAILED", String.valueOf(e.getMessage()));
+            }
+        }).start();
+    }
+
+    @ActivityCallback
+    private void handleApkInstallResult(PluginCall call, androidx.activity.result.ActivityResult result) {
+        if (call == null) return;
+        JSObject res = new JSObject();
+        boolean installed = result.getResultCode() == android.app.Activity.RESULT_OK;
+        res.put("ok", installed);
+        res.put("installed", installed);
+        if (installed) {
+            try {
+                Intent launch = getContext().getPackageManager()
+                        .getLaunchIntentForPackage(getContext().getPackageName());
+                if (launch != null) {
+                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                    getContext().startActivity(launch);
+                }
+            } catch (Exception ignored) { }
+        } else {
+            res.put("reason", "INSTALL_CANCELLED");
+        }
+        call.resolve(res);
     }
 
     @PluginMethod

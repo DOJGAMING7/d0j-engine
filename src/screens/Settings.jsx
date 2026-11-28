@@ -46,6 +46,7 @@ export default function Settings({
   onRunQuickTest
 }) {
   const [url, setUrl] = useState(settings.updateUrl || '')
+  const [apkUrl, setApkUrl] = useState(settings.apkUrl || '')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [vmPath, setVmPath] = useState('')
@@ -184,6 +185,26 @@ export default function Settings({
     } else {
       saveSettings({ updateUrl: url })
     }
+  }
+
+  const installApk = async () => {
+    setBusy(true)
+    let target = apkUrl.trim()
+    if (!target || target.includes('/latest/')) {
+      try {
+        const releases = await fetch('https://api.github.com/repos/DOJGAMING7/d0j-engine/releases?per_page=1').then(r => r.json())
+        target = releases?.[0]?.assets?.find(asset => String(asset.name).endsWith('.apk'))?.browser_download_url || ''
+      } catch { target = '' }
+    }
+    if (!target.startsWith('https://')) {
+      setMsg('No APK URL found')
+      setBusy(false)
+      return
+    }
+    saveSettings({ apkUrl })
+    const res = await native.installApkFromUrl(target).catch(e => ({ ok: false, error: String(e?.message || e) }))
+    setMsg(res?.ok ? 'Installing · app will restart when done' : `APK install: ${res?.error || res?.reason || 'failed'}`)
+    setBusy(false)
   }
 
   const doRollback = async () => {
@@ -412,6 +433,20 @@ export default function Settings({
           </div>
           <div className="meta-line">Installed: {bundleStatus?.version || 'built-in'} · {msg || 'idle'}</div>
           <div className="meta-line">SHA: {bundleStatus?.sha256 ? String(bundleStatus.sha256).slice(0, 16) + '…' : '—'}</div>
+        </section>
+
+        <section className="panel">
+          <h2>APK Updates</h2>
+          <p>Downloads the newest GitHub release APK, opens the system installer, then relaunches the app. Leave the URL blank for the latest release.</p>
+          <label className="field-label">APK URL (blank = latest release)</label>
+          <div className="input-row">
+            <input value={apkUrl} placeholder="https://github.com/.../D0J-ENGINE-V1.apk" onChange={e => setApkUrl(e.target.value)} />
+            <button className="btn ghost" onClick={() => saveSettings({ apkUrl })}>Save</button>
+          </div>
+          <div className="btn-row">
+            <button className="btn primary wide" disabled={busy} onClick={installApk}>Download + Install + Restart</button>
+          </div>
+          <div className="meta-line">Last: {msg || 'idle'}</div>
         </section>
 
         <section className="panel">
