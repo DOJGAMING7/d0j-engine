@@ -3,6 +3,8 @@ import { Capacitor, registerPlugin } from '@capacitor/core'
 const noopHandle = { remove: async () => {} }
 const webFallback = {
   ping: async () => ({ ok: false, native: false }),
+  getLastCrash: async () => ({ ok: false, text: '' }),
+  clearLastCrash: async () => ({ ok: false }),
   hasOverlayPermission: async () => ({ granted: true, native: false }),
   requestOverlayPermission: async () => ({ ok: true, native: false }),
   startFloating: async () => ({ ok: false, error: 'WEB_ONLY' }),
@@ -67,6 +69,8 @@ const native = {
   plugin,
   isNative: () => Capacitor.isNativePlatform(),
   ping: () => call('ping'),
+  getLastCrash: () => call('getLastCrash'),
+  clearLastCrash: () => call('clearLastCrash'),
   hasOverlayPermission: async () => {
     if (!Capacitor.isNativePlatform()) return { granted: true, native: false }
     const res = await call('hasOverlayPermission')

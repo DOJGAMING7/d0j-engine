@@ -153,6 +153,27 @@ test('screen capture stays on-device and feeds live line geometry', () => {
   assert.ok(overlay.includes('FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION'))
 })
 
+test('crash diagnostics are saved locally and exposed in settings', () => {
+  const manifest = read('android/app/src/main/AndroidManifest.xml')
+  const appClass = read('android/app/src/main/java/com/d0j/engine/D0JApp.java')
+  const prefs = read('android/app/src/main/java/com/d0j/engine/D0JPrefs.java')
+  const plugin = read('android/app/src/main/java/com/d0j/engine/D0JNativePlugin.java')
+  const nativeJs = read('src/lib/native.js')
+  const settings = read('src/screens/Settings.jsx')
+
+  assert.ok(manifest.includes('android:name=".D0JApp"'))
+  assert.ok(manifest.includes('FOREGROUND_SERVICE_MEDIA_PROJECTION'))
+  assert.ok(appClass.includes('Thread.setDefaultUncaughtExceptionHandler'))
+  assert.ok(appClass.includes('D0JPrefs.LAST_CRASH'))
+  assert.ok(prefs.includes('LAST_CRASH'))
+  assert.ok(plugin.includes('public void getLastCrash(PluginCall call)'))
+  assert.ok(plugin.includes('public void clearLastCrash(PluginCall call)'))
+  assert.ok(nativeJs.includes('getLastCrash:'))
+  assert.ok(nativeJs.includes('clearLastCrash:'))
+  assert.ok(settings.includes('COPY CRASH LOG'))
+  assert.ok(settings.includes('native.clearLastCrash()'))
+})
+
 test('quick test reports the exact failed core step', () => {
   const app = read('src/App.jsx')
   assert.ok(app.includes('Quick test FAIL · core ${coreText} · ${firstFailed?.name || \'error\'}: ${String(firstFailed?.detail || \'\').slice(0, 80)}'))

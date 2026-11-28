@@ -81,6 +81,23 @@ public class D0JNativePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void getLastCrash(PluginCall call) {
+        JSObject res = new JSObject();
+        String text = D0JPrefs.getString(getContext(), D0JPrefs.LAST_CRASH, "");
+        res.put("ok", text != null && !text.trim().isEmpty());
+        res.put("text", text == null ? "" : text);
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void clearLastCrash(PluginCall call) {
+        D0JPrefs.setString(getContext(), D0JPrefs.LAST_CRASH, "");
+        JSObject res = new JSObject();
+        res.put("ok", true);
+        call.resolve(res);
+    }
+
+    @PluginMethod
     public void hasOverlayPermission(PluginCall call) {
         JSObject res = new JSObject();
         res.put("granted", canOverlay(getContext()));

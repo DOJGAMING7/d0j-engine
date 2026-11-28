@@ -13,6 +13,7 @@ public final class D0JPrefs {
     public static final String SESSION_PACKAGE = "session_package";
     public static final String SESSION_STATUS = "session_status";
     public static final String SESSION_STATUS_TEXT = "session_status_text";
+    public static final String LAST_CRASH = "last_crash";
 
     private D0JPrefs() {}
 

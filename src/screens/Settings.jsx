@@ -66,6 +66,12 @@ export default function Settings({
   const [probeLength, setProbeLength] = useState('4096')
   const [vmMsg, setVmMsg] = useState('')
   const [vmBusy, setVmBusy] = useState(false)
+  const [crashLog, setCrashLog] = useState('')
+  const [crashCopied, setCrashCopied] = useState(false)
+
+  useEffect(() => {
+    native.getLastCrash().then(res => setCrashLog(res?.text || '')).catch(() => {})
+  }, [])
 
   useEffect(() => {
     Promise.all([native.vmStatus(), native.vmHooks(), native.vmState(), native.vmBindings(), native.vmProbe(), native.vmList()])
@@ -185,6 +191,16 @@ export default function Settings({
       setTimeout(() => window.location.reload(), 600)
     } else {
       saveSettings({ updateUrl: url })
+    }
+  }
+
+  const copyCrash = async () => {
+    if (!crashLog) return
+    try {
+      await navigator.clipboard.writeText(crashLog)
+      setCrashCopied(true)
+    } catch (e) {
+      setMsg(`Crash copy failed: ${e?.message || e}`)
     }
   }
 
@@ -468,11 +484,21 @@ export default function Settings({
         </section>
 
         <section className="panel">
+          <h2>Diagnostics</h2>
+          <p>If the app crashes, restart it and copy the saved stack trace here. Nothing is uploaded automatically.</p>
+          <textarea className="probe-export" readOnly value={crashLog || 'No crash recorded.'} />
+          <div className="btn-row">
+            <button className="btn ghost" disabled={!crashLog} onClick={copyCrash}>{crashCopied ? 'COPIED ✓' : 'COPY CRASH LOG'}</button>
+            <button className="btn ghost" disabled={!crashLog} onClick={async () => { await native.clearLastCrash().catch(() => {}); setCrashLog(''); setCrashCopied(false) }}>Clear</button>
+          </div>
+        </section>
+
+        <section className="panel">
           <h2>Build Info / Limits</h2>
           <div className="meta-line">SNAKE ENGINE · private single-user build</div>
           <div className="meta-line">A1: No Accessibility, no purchase guard, no auto-back.</div>
           <div className="meta-line">2B fallback: session-scoped overlay permission only when game session starts.</div>
-          <div className="meta-line">Prediction: demo table local/simulated. Real 8BP live lines need in-game bridge/patch.</div>
+          <div className="meta-line">Live lines: on-device screen reading during an active session. Demo table stays local/simulated.</div>
         </section>
       </div>
     </main>
