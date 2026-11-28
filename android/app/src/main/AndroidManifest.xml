@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
 
     <queries>
         <package android:name="com.miniclip.eightballpool" />
@@ -46,6 +48,119 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Personal private game-session mod menu overlay" />
         </service>
+
+        <!-- Rootless VM host substrate. The framework hook is deliberately NOT attached. -->
+        <service
+            android:name=".vm.VMDaemonService"
+            android:exported="false"
+            android:process=":vmdaemon"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Personal rootless game-host substrate" />
+        </service>
+
+        <service android:name=".vm.VMProxyService0" android:exported="false" android:process=":p0" />
+        <service android:name=".vm.VMProxyService1" android:exported="false" android:process=":p1" />
+        <service android:name=".vm.VMProxyService2" android:exported="false" android:process=":p2" />
+        <service android:name=".vm.VMProxyService3" android:exported="false" android:process=":p3" />
+
+        <activity
+            android:name=".vm.VMProxyActivity0"
+            android:exported="false"
+            android:process=":p0"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".vm.VMProxyActivity1"
+            android:exported="false"
+            android:process=":p1"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".vm.VMProxyActivity2"
+            android:exported="false"
+            android:process=":p2"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".vm.VMProxyActivity3"
+            android:exported="false"
+            android:process=":p3"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:screenOrientation="portrait" />
+
+        <provider
+            android:name=".vm.SystemCallProvider"
+            android:authorities="${applicationId}.vmcall"
+            android:exported="false"
+            android:process=":vmdaemon" />
+
+        <!-- Local-only memory RPC, one instance inside each hosted process. -->
+        <provider
+            android:name=".vm.VMMemoryProvider"
+            android:authorities="${applicationId}.vmmem.p0"
+            android:exported="false"
+            android:process=":p0">
+            <meta-data android:name="vm.process" android:value="p0" />
+        </provider>
+        <provider
+            android:name=".vm.VMMemoryProvider"
+            android:authorities="${applicationId}.vmmem.p1"
+            android:exported="false"
+            android:process=":p1">
+            <meta-data android:name="vm.process" android:value="p1" />
+        </provider>
+        <provider
+            android:name=".vm.VMMemoryProvider"
+            android:authorities="${applicationId}.vmmem.p2"
+            android:exported="false"
+            android:process=":p2">
+            <meta-data android:name="vm.process" android:value="p2" />
+        </provider>
+        <provider
+            android:name=".vm.VMMemoryProvider"
+            android:authorities="${applicationId}.vmmem.p3"
+            android:exported="false"
+            android:process=":p3">
+            <meta-data android:name="vm.process" android:value="p3" />
+        </provider>
+
+        <!-- Local-only input RPC, one instance inside each hosted process. -->
+        <provider
+            android:name=".vm.VMInputProvider"
+            android:authorities="${applicationId}.vminput.p0"
+            android:exported="false"
+            android:process=":p0">
+            <meta-data android:name="vm.process" android:value="p0" />
+        </provider>
+        <provider
+            android:name=".vm.VMInputProvider"
+            android:authorities="${applicationId}.vminput.p1"
+            android:exported="false"
+            android:process=":p1">
+            <meta-data android:name="vm.process" android:value="p1" />
+        </provider>
+        <provider
+            android:name=".vm.VMInputProvider"
+            android:authorities="${applicationId}.vminput.p2"
+            android:exported="false"
+            android:process=":p2">
+            <meta-data android:name="vm.process" android:value="p2" />
+        </provider>
+        <provider
+            android:name=".vm.VMInputProvider"
+            android:authorities="${applicationId}.vminput.p3"
+            android:exported="false"
+            android:process=":p3">
+            <meta-data android:name="vm.process" android:value="p3" />
+        </provider>
+
+        <receiver android:name=".vm.VMReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.d0j.engine.vm.REPLAY" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

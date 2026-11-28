@@ -44,6 +44,7 @@ export const DEFAULT_CONFIG = {
   power: 74,
   lineSpin: 0,
   lineOpacity: 85,
+  lineTestShoot: false,
   sideSpin: 0,
   topSpin: 0,
   // Session/UX
@@ -54,7 +55,8 @@ export const DEFAULT_CONFIG = {
   blockLaunchOnFail: false,
   menuSide: 'left',
   menuX: 18,
-  menuY: 18
+  menuY: 18,
+  autoStopOnGameExit: false
 }
 
 export function normalizeMode(value) {

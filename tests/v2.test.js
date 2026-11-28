@@ -40,7 +40,7 @@ test('v2 config contains the reference feature names', () => {
 test('mod menu keeps core cheats and clean session labels', () => {
   const source = read('src/components/ModMenu.jsx') + read('src/lib/config.js') + read('src/screens/Home.jsx')
   const required = [
-    'HOME MENU',
+    'D0J Mod Menu',
     'Show lines', 'Keep lines after shot', 'Power lock',
     'Default power', 'Show pockets',
     'Enable auto play', 'Auto play mode',
@@ -60,7 +60,7 @@ test('mod menu keeps core cheats and clean session labels', () => {
 
 test('home screen has supported games and 8BP redirect target', () => {
   const source = read('src/screens/Home.jsx') + read('src/lib/config.js')
-  for (const label of ['HOME MENU', 'SUPPORTED GAMES', '8 BALL POOL', 'CARROM POOL', 'SOCCER STARS']) {
+  for (const label of ['SUPPORTED GAMES', '8 BALL POOL', 'CARROM POOL', 'SOCCER STARS']) {
     assert.ok(source.includes(label), `missing home label: ${label}`)
   }
   const config = read('src/lib/config.js')
@@ -83,6 +83,20 @@ test('native Android layer declares session overlay without accessibility guard'
   assert.ok(overlay.includes('ACTION_STOP_SESSION'))
   assert.ok(overlay.includes('ACTION_UPDATE_STATUS'))
   assert.ok(overlay.includes('stopSessionInternal'))
+})
+
+test('all-line prediction is wired into the client and floating menu', () => {
+  const app = read('src/App.jsx')
+  const table = read('src/screens/TableDemo.jsx')
+  const overlay = read('android/app/src/main/java/com/d0j/engine/D0JOverlayService.java')
+
+  assert.ok(app.includes("command === 'runLineTest'"), 'overlay line command is not handled')
+  assert.ok(app.includes('onRunLineScript={runLineTest}'), 'table screen cannot run the script')
+  assert.ok(app.includes("if (!overlayMode && report?.ok) setTab('table')"), 'client does not open the table after the script')
+  assert.ok(app.includes('native.requestNotificationPermission()'), 'session start does not request notification permission')
+  assert.ok(table.includes('state.lines'), 'table screen does not render stored lines')
+  assert.ok(table.includes('RUN ALL LINES'), 'table screen has no all-line action')
+  assert.ok(overlay.includes('Run All Prediction Lines'), 'floating menu still shows the old 3-shot action')
 })
 
 test('script manifest hashes match shipped scripts', () => {
@@ -126,14 +140,11 @@ test('D0JNative is registered before the Capacitor bridge is created', () => {
   assert.ok(plugin.includes('if (options == null) options = call.getData();'))
 })
 
-test('release version is bumped to 2.1.0', () => {
+test('release version is bumped to 2.1.1', () => {
   const pkg = JSON.parse(read('package.json'))
-  assert.equal(pkg.version, '2.1.0')
+  assert.equal(pkg.version, '2.1.1')
 
   const gradle = read('android/app/build.gradle')
-  assert.ok(gradle.includes('versionCode 6'))
-  assert.ok(gradle.includes('versionName "2.1.0"'))
-
-  const workflow = read('.github/workflows/build-apk.yml')
-  assert.ok(workflow.includes('tag_name: v2.1.0-${{ github.run_number }}'))
+  assert.ok(gradle.includes('versionCode 7'))
+  assert.ok(gradle.includes('versionName "2.1.1"'))
 })

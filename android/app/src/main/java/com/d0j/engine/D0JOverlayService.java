@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
 import android.content.pm.ServiceInfo;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -31,7 +32,10 @@ import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 
+import com.d0j.engine.vm.SystemCallProvider;
 import com.getcapacitor.JSObject;
+
+import org.json.JSONObject;
 
 public class D0JOverlayService extends Service {
     public static final String ACTION_START_SESSION = "com.d0j.engine.action.START_SESSION";
@@ -40,6 +44,8 @@ public class D0JOverlayService extends Service {
     public static final String ACTION_OPEN_MENU = "com.d0j.engine.action.OPEN_MENU";
     public static final String ACTION_OPEN_APP = "com.d0j.engine.action.OPEN_APP";
     public static final String ACTION_SHOW_TOAST = "com.d0j.engine.action.SHOW_TOAST";
+    public static final String ACTION_UPDATE_LINES = "com.d0j.engine.action.UPDATE_LINES";
+    public static final String ACTION_CLEAR_LINES = "com.d0j.engine.action.CLEAR_LINES";
 
     private static final String CHANNEL_ID = "d0j_session";
     private static final int NOTIFICATION_ID = 7701;
@@ -54,17 +60,29 @@ public class D0JOverlayService extends Service {
     private WindowManager.LayoutParams buttonParams;
     private WindowManager.LayoutParams menuParams;
     private WindowManager.LayoutParams toastParams;
+    private View lineView;
+    private WindowManager.LayoutParams lineParams;
     private String sessionPackage = "com.miniclip.eightballpool";
     private String statusText = "Session active";
     private String statusState = "running";
+    private int gameExitTicks = 0;
     private final Runnable hideToastRunnable = this::removeToast;
     private final Runnable sessionWatchdog = new Runnable() {
         @Override public void run() {
             if (!active) return;
             // Failsafe: if session flag was cleared externally, stop.
             if (!D0JPrefs.getBoolean(D0JOverlayService.this, D0JPrefs.SESSION_ACTIVE, false)) {
-                stopSessionInternal();
+                stopSessionInternal("SESSION_FLAG_CLEARED");
                 return;
+            }
+            if (gameExited()) {
+                gameExitTicks += 1;
+                if (gameExitTicks >= 2) {
+                    stopSessionInternal("GAME_EXITED");
+                    return;
+                }
+            } else {
+                gameExitTicks = 0;
             }
             main.postDelayed(this, 4000);
         }
@@ -103,6 +121,13 @@ public class D0JOverlayService extends Service {
                 if (!active) startSessionInternal(intent);
                 showToast(intent == null ? "" : intent.getStringExtra("text"), intent == null ? "info" : intent.getStringExtra("kind"));
                 return START_STICKY;
+            case ACTION_UPDATE_LINES:
+                if (!active) startSessionInternal(intent);
+                showLines(intent == null ? "" : intent.getStringExtra("json"));
+                return START_STICKY;
+            case ACTION_CLEAR_LINES:
+                clearLines();
+                return START_STICKY;
             case ACTION_START_SESSION:
             default:
                 startSessionInternal(intent);
@@ -123,7 +148,9 @@ public class D0JOverlayService extends Service {
         D0JPrefs.setString(this, D0JPrefs.SESSION_PACKAGE, sessionPackage);
         startForegroundCompat();
         if (floatButton == null) createFloatButton();
+        if (lineView == null && canOverlay(this)) createLineLayer();
         active = true;
+        gameExitTicks = 0;
         main.removeCallbacks(sessionWatchdog);
         main.postDelayed(sessionWatchdog, 4000);
 
@@ -146,15 +173,22 @@ public class D0JOverlayService extends Service {
     }
 
     private void stopSessionInternal() {
+        stopSessionInternal("manual");
+    }
+
+    private void stopSessionInternal(String reason) {
         active = false;
+        gameExitTicks = 0;
         D0JPrefs.setBoolean(this, D0JPrefs.SESSION_ACTIVE, false);
         D0JPrefs.setString(this, D0JPrefs.SESSION_STATUS, "stopped");
         D0JPrefs.setString(this, D0JPrefs.SESSION_STATUS_TEXT, "Session stopped");
+        D0JNativePlugin.notifySessionEnded(reason == null ? "manual" : reason);
         main.removeCallbacks(sessionWatchdog);
         main.removeCallbacks(hideToastRunnable);
         removeMenu();
         removeToast();
         removeFloat();
+        removeLineLayer();
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE);
             else stopForeground(true);
@@ -270,56 +304,124 @@ public class D0JOverlayService extends Service {
     private void showMenu() {
         if (menuView != null) return;
         DisplayMetrics dm = getResources().getDisplayMetrics();
-        int width = Math.min(dm.widthPixels - dp(16), dp(980));
-        int height = Math.min(dm.heightPixels - dp(24), dp(620));
+        int width = Math.min(dm.widthPixels - dp(20), dp(430));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#101010"));
+        bg.setColor(Color.parseColor("#111111"));
         bg.setCornerRadius(dp(20));
         bg.setStroke(dp(1), Color.parseColor("#3A3A3A"));
         root.setBackground(bg);
+        root.setPadding(dp(12), dp(10), dp(12), dp(12));
 
-        // Drag handle row
-        LinearLayout handle = new LinearLayout(this);
-        handle.setOrientation(LinearLayout.HORIZONTAL);
-        handle.setGravity(Gravity.CENTER_VERTICAL);
-        handle.setPadding(dp(12), dp(8), dp(12), dp(8));
-        TextView dragHint = new TextView(this);
-        dragHint.setText("D0J MOD MENU · drag");
-        dragHint.setTextColor(Color.parseColor("#CCCCCC"));
-        dragHint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
-        handle.addView(dragHint, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title = new TextView(this);
+        title.setText("D0J MOD MENU");
+        title.setTextColor(Color.WHITE);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        header.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         Button hide = smallBtn("Hide");
         hide.setOnClickListener(v -> removeMenu());
-        handle.addView(hide);
-        root.addView(handle, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        header.addView(hide);
+        root.addView(header);
 
-        android.webkit.WebView web = new android.webkit.WebView(this);
-        web.setBackgroundColor(Color.parseColor("#101010"));
-        android.webkit.WebSettings ws = web.getSettings();
-        ws.setJavaScriptEnabled(true);
-        ws.setDomStorageEnabled(true);
-        ws.setAllowFileAccess(true);
-        ws.setAllowContentAccess(true);
-        ws.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
-        web.setWebViewClient(new android.webkit.WebViewClient());
-        web.loadUrl("https://localhost/?overlay=1&ui=session");
-        menuWebView = web;
-        root.addView(web, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        TextView sub = new TextView(this);
+        sub.setText(statusText + " · drag header");
+        sub.setTextColor(Color.parseColor("#BDBDBD"));
+        sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        sub.setPadding(0, dp(2), 0, dp(8));
+        root.addView(sub);
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(content);
+        root.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Math.min(dm.heightPixels - dp(180), dp(560))));
+
+        // Status
+        content.addView(section("Status / Test"));
+        content.addView(infoText("Session: " + (active ? "ACTIVE" : "IDLE")));
+        content.addView(infoText("Target: " + sessionPackage));
+        content.addView(actionRow("Run Quick Test", v -> D0JNativePlugin.notifyMenuCommand("runTest")));
+        content.addView(actionRow("Open App", v -> openApp()));
+        content.addView(actionRow("Launch 8BP", v -> D0JNativePlugin.notifyMenuCommand("launch8bp")));
+        content.addView(actionRow("Stop Session", v -> { D0JNativePlugin.notifyMenuCommand("stop"); stopSessionInternal(); }));
+
+        // VM host substrate (no framework hook attached in this build)
+        content.addView(section("VM Host (rootless)"));
+        content.addView(infoText("Hook status is reported, never assumed."));
+        content.addView(actionRow("Session Guard Check", v -> D0JNativePlugin.notifyMenuCommand("sessionGuard")));
+        content.addView(actionRow("VM Host Status", v -> D0JNativePlugin.notifyMenuCommand("vmStatus")));
+        content.addView(actionRow("VM Hook Status", v -> D0JNativePlugin.notifyMenuCommand("vmHooks")));
+        content.addView(actionRow("Attach VM Hooks", v -> D0JNativePlugin.notifyMenuCommand("vmAttach")));
+        content.addView(actionRow("Start VM Host", v -> D0JNativePlugin.notifyMenuCommand("vmStart")));
+        content.addView(actionRow("Run Lines From State", v -> D0JNativePlugin.notifyMenuCommand("runLiveLines")));
+
+        // Lines
+        content.addView(section("Lines / Prediction"));
+        addToggle(content, "Show lines", "showLines", true);
+        addToggle(content, "Keep lines after shot", "keepLines", true);
+        addToggle(content, "Power lock", "powerLock", false);
+        addSeek(content, "Default power", "power", 0, 100, 74, "%");
+        addToggle(content, "Show pockets", "showPockets", true);
+        addSeek(content, "Spin", "lineSpin", -100, 100, 0, "");
+        addSeek(content, "Line opacity", "lineOpacity", 10, 100, 85, "%");
+        addSeek(content, "Guide opacity", "guideOpacity", 10, 100, 70, "%");
+        content.addView(actionRow("Run All Prediction Lines", v -> D0JNativePlugin.notifyMenuCommand("runLineTest")));
+        content.addView(actionRow("Start Live Overlay Lines", v -> D0JNativePlugin.notifyMenuCommand("liveStart")));
+        content.addView(actionRow("Stop Live Overlay Lines", v -> D0JNativePlugin.notifyMenuCommand("liveStop")));
+        content.addView(actionRow("Open Line Prediction Test", v -> D0JNativePlugin.notifyMenuCommand("openTable")));
+
+        // Auto play
+        content.addView(section("Auto Play"));
+        addToggle(content, "Enable auto play", "autoPlay", false);
+        addChoice(content, "Auto play mode", "autoPlayMode", new String[]{"Pro Fast","Pro Player","Fast Mode"});
+        addToggle(content, "Failed break", "failedBreak", false);
+        content.addView(actionRow("Run Ratimoda", v -> D0JNativePlugin.notifyMenuCommand("autoplay")));
+        content.addView(actionRow("Attach Live Input", v -> D0JNativePlugin.notifyMenuCommand("inputAttach")));
+        content.addView(actionRow("Start Live Auto", v -> D0JNativePlugin.notifyMenuCommand("autoLiveStart")));
+        content.addView(actionRow("Stop Live Auto", v -> D0JNativePlugin.notifyMenuCommand("autoLiveStop")));
+
+        // Auto queue
+        content.addView(section("Auto Queue"));
+        addToggle(content, "Auto queue", "autoQueue", false);
+        addChoice(content, "Queue mode", "queueMode", new String[]{"ONE","SESSION","INFINITE"});
+        addSeek(content, "Match limit", "matchLimit", 1, 20, 3, "");
+        addSeek(content, "Delay", "queueDelay", 1, 10, 2, "s");
+        addSeek(content, "Jitter", "jitter", 0, 20, 4, "x0.1s");
+        addSeek(content, "Retries", "retries", 0, 5, 2, "");
+        addToggle(content, "Stop on manual input", "stopOnManual", true);
+        addChoice(content, "Queue table (coins)", "queueTable", new String[]{"London","Moscow","Beijing","Barcelona"});
+
+        // 8 ball
+        content.addView(section("8 Ball / Golden Shot"));
+        addToggle(content, "Prioritize 9th ball", "prioritize9", false);
+        addToggle(content, "Paralysis opponent turn", "paralysisOpponent", false);
+        addToggle(content, "Clean up shot", "cleanUpShot", false);
+        addChoice(content, "Golden shot target", "goldenTarget", new String[]{"1","2","3","4"});
+
+        content.addView(section("Session"));
+        addToggle(content, "Auto-stop when 8BP closes", "autoStopOnGameExit", false);
+        content.addView(infoText("Auto-stop needs Usage access permission (optional)."));
+        content.addView(section("Notes"));
+        content.addView(infoText("A1: no accessibility / no auto-back."));
+        content.addView(infoText("Real 8BP live lines need game bridge/patch. Demo/table prediction works locally."));
 
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE;
-        menuParams = new WindowManager.LayoutParams(width, height, type,
+        menuParams = new WindowManager.LayoutParams(width, WindowManager.LayoutParams.WRAP_CONTENT, type,
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT);
         menuParams.gravity = Gravity.TOP | Gravity.START;
         menuParams.x = D0JPrefs.getInt(this, D0JPrefs.FLOAT_X, dp(10));
         menuParams.y = Math.max(dp(40), D0JPrefs.getInt(this, D0JPrefs.FLOAT_Y, dp(90)));
 
-        handle.setOnTouchListener(new View.OnTouchListener() {
+        header.setOnTouchListener(new View.OnTouchListener() {
             float dx, dy; int sx, sy;
             @Override public boolean onTouch(View v, MotionEvent e) {
                 if (menuParams == null || menuView == null) return false;
@@ -350,7 +452,7 @@ public class D0JOverlayService extends Service {
         tv.setTextColor(Color.parseColor("#FFFFFF"));
         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
         tv.setTypeface(Typeface.DEFAULT_BOLD);
-        tv.setPadding(0, dp(10), 0, dp(6));
+        tv.setPadding(0, dp(12), 0, dp(6));
         return tv;
     }
 
@@ -397,6 +499,132 @@ public class D0JOverlayService extends Service {
         b.setLayoutParams(lp);
         b.setOnClickListener(click);
         return b;
+    }
+
+    private void addToggle(LinearLayout content, String label, String key, boolean def) {
+        boolean checked = D0JPrefs.getConfigBoolean(this, key, def);
+        Button row = new Button(this);
+        row.setAllCaps(false);
+        row.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        row.setText(label + "   [" + (checked ? "ON" : "OFF") + "]");
+        row.setTextColor(Color.WHITE);
+        row.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(checked ? Color.parseColor("#2A2A2A") : Color.parseColor("#191919"));
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), Color.parseColor(checked ? "#FFFFFF" : "#333333"));
+        row.setBackground(bg);
+        row.setPadding(dp(14), dp(10), dp(14), dp(10));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = dp(8);
+        row.setLayoutParams(lp);
+        row.setOnClickListener(v -> {
+            boolean next = !D0JPrefs.getConfigBoolean(this, key, def);
+            D0JPrefs.setString(this, D0JPrefs.CONFIG_PREFIX + key, String.valueOf(next));
+            row.setText(label + "   [" + (next ? "ON" : "OFF") + "]");
+            GradientDrawable nbg = new GradientDrawable();
+            nbg.setColor(next ? Color.parseColor("#2A2A2A") : Color.parseColor("#191919"));
+            nbg.setCornerRadius(dp(12));
+            nbg.setStroke(dp(1), Color.parseColor(next ? "#FFFFFF" : "#333333"));
+            row.setBackground(nbg);
+            JSObject patch = new JSObject();
+            patch.put(key, next);
+            D0JNativePlugin.notifyConfigChanged(patch);
+        });
+        content.addView(row);
+    }
+
+    private void addSeek(LinearLayout content, String label, String key, int min, int max, int def, String suffix) {
+        int val = D0JPrefs.getConfigInt(this, key, def);
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setPadding(dp(12), dp(8), dp(12), dp(10));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#191919"));
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), Color.parseColor("#333333"));
+        wrap.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = dp(8);
+        wrap.setLayoutParams(lp);
+
+        TextView head = new TextView(this);
+        head.setText(label + ": " + val + suffix);
+        head.setTextColor(Color.WHITE);
+        head.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        wrap.addView(head);
+        SeekBar sb = new SeekBar(this);
+        sb.setMax(max - min);
+        sb.setProgress(val - min);
+        sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                int v = min + progress;
+                head.setText(label + ": " + v + suffix);
+                if (fromUser) {
+                    D0JPrefs.setString(D0JOverlayService.this, D0JPrefs.CONFIG_PREFIX + key, String.valueOf(v));
+                    JSObject patch = new JSObject();
+                    patch.put(key, v);
+                    D0JNativePlugin.notifyConfigChanged(patch);
+                }
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        wrap.addView(sb);
+        content.addView(wrap);
+    }
+
+    private void addChoice(LinearLayout content, String label, String key, String[] options) {
+        String current = D0JPrefs.getConfigString(this, key, options[0]);
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setPadding(dp(12), dp(8), dp(12), dp(10));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#191919"));
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), Color.parseColor("#333333"));
+        wrap.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = dp(8);
+        wrap.setLayoutParams(lp);
+        TextView head = new TextView(this);
+        head.setText(label);
+        head.setTextColor(Color.WHITE);
+        head.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        wrap.addView(head);
+        LinearLayout chips = new LinearLayout(this);
+        chips.setOrientation(LinearLayout.HORIZONTAL);
+        chips.setPadding(0, dp(8), 0, 0);
+        wrap.addView(chips);
+        Runnable render = new Runnable() {
+            @Override public void run() {
+                chips.removeAllViews();
+                String cur = D0JPrefs.getConfigString(D0JOverlayService.this, key, options[0]);
+                for (String opt : options) {
+                    Button b = smallBtn(opt);
+                    boolean active = opt.equals(cur);
+                    GradientDrawable bbg = new GradientDrawable();
+                    bbg.setColor(active ? Color.parseColor("#FFFFFF") : Color.parseColor("#222222"));
+                    bbg.setCornerRadius(dp(10));
+                    bbg.setStroke(dp(1), Color.parseColor(active ? "#FFFFFF" : "#444444"));
+                    b.setBackground(bbg);
+                    b.setTextColor(active ? Color.BLACK : Color.WHITE);
+                    LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    blp.rightMargin = dp(6);
+                    b.setLayoutParams(blp);
+                    b.setOnClickListener(v -> {
+                        D0JPrefs.setString(D0JOverlayService.this, D0JPrefs.CONFIG_PREFIX + key, opt);
+                        JSObject patch = new JSObject();
+                        try { patch.put(key, Integer.parseInt(opt)); } catch (Exception e) { patch.put(key, opt); }
+                        D0JNativePlugin.notifyConfigChanged(patch);
+                        this.run();
+                    });
+                    chips.addView(b);
+                }
+            }
+        };
+        render.run();
+        content.addView(wrap);
     }
 
     private void showToast(String text, String kind) {
@@ -464,6 +692,105 @@ public class D0JOverlayService extends Service {
         } catch (Exception ignored) {}
     }
 
+    private boolean hasUsageAccess() {
+        try {
+            android.app.AppOpsManager appOps = (android.app.AppOpsManager) getSystemService(Context.APP_OPS_SERVICE);
+            int mode = appOps.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), getPackageName());
+            return mode == android.app.AppOpsManager.MODE_ALLOWED;
+        } catch (Exception e) { return false; }
+    }
+
+    private String topPackage() {
+        try {
+            if (!hasUsageAccess()) return null;
+            android.app.usage.UsageStatsManager usm = (android.app.usage.UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
+            long end = System.currentTimeMillis();
+            android.app.usage.UsageEvents events = usm.queryEvents(end - 15000, end);
+            android.app.usage.UsageEvents.Event ev = new android.app.usage.UsageEvents.Event();
+            String last = null;
+            while (events.hasNextEvent()) {
+                events.getNextEvent(ev);
+                if (ev.getEventType() == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
+                    last = ev.getPackageName();
+                }
+            }
+            return last;
+        } catch (Exception e) { return null; }
+    }
+
+    /**
+     * Returns true only when there is positive evidence that the game owned by
+     * this session is gone. With no evidence the session is left alone.
+     */
+    private boolean gameExited() {
+        try {
+            Bundle args = new Bundle();
+            args.putString("op", "sessionWatch");
+            Bundle response = getContentResolver().call(
+                    SystemCallProvider.uri(this), SystemCallProvider.METHOD, null, args);
+            if (response == null) return false;
+            String json = response.getString("json", "");
+            if (json == null || json.trim().isEmpty()) return false;
+            JSONObject value = new JSONObject(json);
+            String verdict = value.optString("verdict", "UNKNOWN");
+            if ("GAME_ALIVE".equals(verdict)) return false;
+            if ("GAME_EXITED".equals(verdict)) return true;
+
+            // Legacy fallback when only Usage access is available.
+            String top = topPackage();
+            return top != null && !top.equals(getPackageName())
+                    && !top.equals(sessionPackage)
+                    && !"com.miniclip.eightballpool".equals(top);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    @Override public void onTaskRemoved(Intent rootIntent) {
+        if (active) stopSessionInternal("TASK_REMOVED");
+        super.onTaskRemoved(rootIntent);
+    }
+
+    private void showLines(String json) {
+        if (!canOverlay(this)) return;
+        main.post(() -> {
+            try {
+                if (lineView == null) createLineLayer();
+                if (lineView instanceof D0JLineLayer) ((D0JLineLayer) lineView).setSpecs(json);
+            } catch (Exception ignored) { }
+        });
+    }
+
+    private void clearLines() {
+        main.post(() -> {
+            if (lineView instanceof D0JLineLayer) ((D0JLineLayer) lineView).clear();
+        });
+    }
+
+    private void createLineLayer() {
+        int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : WindowManager.LayoutParams.TYPE_PHONE;
+        int flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
+        lineParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                type, flags, PixelFormat.TRANSLUCENT);
+        lineParams.gravity = Gravity.TOP | Gravity.START;
+        D0JLineLayer layer = new D0JLineLayer(this);
+        lineView = layer;
+        try { windowManager.addView(lineView, lineParams); } catch (Exception ignored) { lineView = null; }
+    }
+
+    private void removeLineLayer() {
+        if (lineView != null) {
+            try { windowManager.removeView(lineView); } catch (Exception ignored) { }
+            lineView = null;
+        }
+    }
+
     private void removeMenu() {
         if (menuView != null) {
             try { windowManager.removeView(menuView); } catch (Exception ignored) {}
@@ -489,6 +816,7 @@ public class D0JOverlayService extends Service {
         removeMenu();
         removeToast();
         removeFloat();
+        removeLineLayer();
         active = false;
         super.onDestroy();
     }

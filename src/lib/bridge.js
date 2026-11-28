@@ -1,5 +1,5 @@
 import { DEFAULT_CONFIG, normalizeMode } from './config.js'
-import { applyPrediction, cloneTable, computePrediction, createDefaultTable } from './prediction.js'
+import { applyPrediction, cloneTable, computePrediction, createDefaultTable, planShotLines } from './prediction.js'
 
 const DEFAULT_STATE = {
   ready: true,
@@ -13,6 +13,7 @@ const DEFAULT_STATE = {
   status: 'SIMULATED',
   table: createDefaultTable(),
   lastPrediction: null,
+  lines: [],
   queue: { mode: 'ONE', delay: 2, jitter: 0.4, retries: 2, limit: 3, queued: 0, matched: 0, completed: 0, failed: 0 }
 }
 
@@ -26,7 +27,14 @@ function cloneState(s) {
   return {
     ...s,
     queue: { ...s.queue },
-    table: cloneTable(s.table)
+    table: cloneTable(s.table),
+    lines: (s.lines || []).map(line => ({
+      ...line,
+      cuePath: (line.cuePath || []).map(p => ({ ...p })),
+      targetPath: (line.targetPath || []).map(p => ({ ...p })),
+      ghost: line.ghost ? { ...line.ghost } : null,
+      pocket: line.pocket ? { ...line.pocket } : null
+    }))
   }
 }
 
@@ -77,6 +85,36 @@ export function createBridge({ onLog = () => {} } = {}) {
       }
       emit()
       return cloneState(state)
+    },
+    async getTable() {
+      return cloneTable(state.table || createDefaultTable())
+    },
+    async planShots(options = {}) {
+      return planShotLines(state.table || createDefaultTable(), {
+        power: options.power ?? config.power ?? state.power,
+        spin: options.spin ?? config.lineSpin ?? config.sideSpin ?? state.spin
+      })
+    },
+    async setLines(lines = []) {
+      const safe = (Array.isArray(lines) ? lines : []).slice(0, 64).map(line => ({
+        ballId: String(line?.ballId ?? 'CUE'),
+        target: line?.target ? { ...line.target } : null,
+        pocket: line?.pocket ? { ...line.pocket } : null,
+        ghost: line?.ghost ? { ...line.ghost } : null,
+        cuePath: (Array.isArray(line?.cuePath) ? line.cuePath : []).slice(0, 256).map(p => ({ x: Number(p?.x) || 0, y: Number(p?.y) || 0 })),
+        targetPath: (Array.isArray(line?.targetPath) ? line.targetPath : []).slice(0, 256).map(p => ({ x: Number(p?.x) || 0, y: Number(p?.y) || 0 })),
+        cutDeg: Number(line?.cutDeg) || 0,
+        cueClear: line?.cueClear === true,
+        targetClear: line?.targetClear === true
+      })).filter(line => line.cuePath.length > 1)
+      state.lines = safe
+      emit()
+      return { ok: true, count: safe.length }
+    },
+    async clearLines() {
+      state.lines = []
+      emit()
+      return { ok: true, count: 0 }
     },
     subscribe(fn) {
       listeners.add(fn)
@@ -130,6 +168,7 @@ export function createBridge({ onLog = () => {} } = {}) {
     },
     async shoot(options = {}) {
       if (stopped) throw new Error('stopped')
+      if (config.keepLines === false) state.lines = []
       const spin = Number(options.spin ?? config.lineSpin ?? 0)
       const power = Number(options.power ?? config.power ?? 74)
       const prediction = await api.predict({ ...options, spin, power })
@@ -192,10 +231,11 @@ export function createBridge({ onLog = () => {} } = {}) {
       ...DEFAULT_STATE,
       queue: { ...DEFAULT_STATE.queue },
       table: createDefaultTable(),
-      lastPrediction: null
+      lastPrediction: null,
+      lines: []
     }
     emit()
   }
 
-  return { api, log, getState: api.getState, setState: api.setState, getTable: () => cloneTable(state.table || createDefaultTable()), subscribe: api.subscribe, startSimulation, stopSimulation, reset, getConfig: api.getConfig, setConfig: api.setConfig }
+  return { api, log, getState: api.getState, setState: api.setState, getTable: api.getTable, planShots: api.planShots, subscribe: api.subscribe, startSimulation, stopSimulation, reset, getConfig: api.getConfig, setConfig: api.setConfig }
 }

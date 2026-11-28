@@ -11,10 +11,10 @@
     {
       "id": "prediction-lines",
       "file": "scripts/prediction-lines.js",
-      "version": "1.0.0",
+      "version": "2.1.1",
       "targetBuild": "8 Ball Pool 56.34.0",
       "enabled": true,
-      "hash": "0bee15e6b7f7c39a19970d4f16e876f2b4ee48f4dc9ee7806f784917cee945c7"
+      "hash": "a3f3ae3b8ff6d1ebf6a9da41b8d1304878d1cd95f166e948dde57f72eed811eb"
     }
   ]
 }

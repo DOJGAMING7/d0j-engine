@@ -1,20 +1,37 @@
 package com.d0j.engine;
 
+import android.Manifest;
+import android.app.AppOpsManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
+import android.os.Process;
 import android.provider.Settings;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.util.Iterator;
 
-@CapacitorPlugin(name = "D0JNative")
+@CapacitorPlugin(
+    name = "D0JNative",
+    permissions = {
+        @com.getcapacitor.annotation.Permission(
+            alias = "notifications",
+            strings = { Manifest.permission.POST_NOTIFICATIONS }
+        )
+    }
+)
 public class D0JNativePlugin extends Plugin {
     private static volatile D0JNativePlugin instance;
 
@@ -184,6 +201,67 @@ public class D0JNativePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void hasNotificationPermission(PluginCall call) {
+        JSObject res = new JSObject();
+        res.put("granted", hasNotificationPerm());
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void requestNotificationPermission(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (getContext().checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissionForAlias("notifications", call, "notificationsCallback");
+                return;
+            }
+        }
+        JSObject res = new JSObject();
+        res.put("granted", true);
+        call.resolve(res);
+    }
+
+    @com.getcapacitor.annotation.PermissionCallback
+    private void notificationsCallback(PluginCall call) {
+        JSObject res = new JSObject();
+        res.put("granted", hasNotificationPerm());
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void hasUsageAccess(PluginCall call) {
+        JSObject res = new JSObject();
+        res.put("granted", hasUsageStatsPermission());
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void requestUsageAccess(PluginCall call) {
+        try {
+            Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+        } catch (Exception ignored) {}
+        JSObject res = new JSObject();
+        res.put("ok", true);
+        call.resolve(res);
+    }
+
+    private boolean hasNotificationPerm() {
+        if (Build.VERSION.SDK_INT < 33) return true;
+        return getContext().checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean hasUsageStatsPermission() {
+        try {
+            AppOpsManager appOps = (AppOpsManager) getContext().getSystemService(Context.APP_OPS_SERVICE);
+            int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), getContext().getPackageName());
+            return mode == AppOpsManager.MODE_ALLOWED;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @PluginMethod
     public void syncConfig(PluginCall call) {
         JSObject options = call.getObject("config");
         if (options == null) options = call.getObject("value");
@@ -262,6 +340,240 @@ public class D0JNativePlugin extends Plugin {
         call.resolve(res);
     }
 
+    @PluginMethod
+    public void vmState(PluginCall call) {
+        call.resolve(vmResult(vmCall("state", new Bundle())));
+    }
+
+    @PluginMethod
+    public void vmStateProvider(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putString("name", call.getString("name", "demo"));
+        call.resolve(vmResult(vmCall("stateProvider", args)));
+    }
+
+    @PluginMethod
+    public void vmBindings(PluginCall call) {
+        call.resolve(vmResult(vmCall("bindings", new Bundle())));
+    }
+
+    @PluginMethod
+    public void vmSaveBindings(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putString("json", call.getString("json", "{}"));
+        call.resolve(vmResult(vmCall("saveBindings", args)));
+    }
+
+    @PluginMethod
+    public void vmProbe(PluginCall call) {
+        String action = call.getString("action", "status");
+        String op;
+        if ("capture".equals(action)) op = "probeCapture";
+        else if ("diff".equals(action)) op = "probeDiff";
+        else if ("clear".equals(action)) op = "probeClear";
+        else op = "probeStatus";
+
+        Bundle args = new Bundle();
+        args.putString("label", call.getString("label", "before"));
+        args.putString("before", call.getString("before", "before"));
+        args.putString("after", call.getString("after", "after"));
+        args.putLong("base", call.getLong("base", 0));
+        args.putInt("length", call.getInt("length", 0));
+        args.putInt("stride", call.getInt("stride", 4));
+        args.putInt("limit", call.getInt("limit", 32));
+        call.resolve(vmResult(vmCall(op, args)));
+    }
+
+    @PluginMethod
+    public void setOverlayLines(PluginCall call) {
+        Intent intent = new Intent(getContext(), D0JOverlayService.class)
+                .setAction(D0JOverlayService.ACTION_UPDATE_LINES)
+                .putExtra("json", call.getString("json", "{}"));
+        startOverlayService(intent);
+        call.resolve(new JSObject().put("ok", true));
+    }
+
+    @PluginMethod
+    public void clearOverlayLines(PluginCall call) {
+        Intent intent = new Intent(getContext(), D0JOverlayService.class)
+                .setAction(D0JOverlayService.ACTION_CLEAR_LINES);
+        startOverlayService(intent);
+        call.resolve(new JSObject().put("ok", true));
+    }
+
+    private void startOverlayService(Intent intent) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) getContext().startForegroundService(intent);
+            else getContext().startService(intent);
+        } catch (Exception ignored) { }
+    }
+
+    @PluginMethod
+    public void vmAttachInput(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putInt("process", call.getInt("process", 0));
+        call.resolve(vmResult(vmCall("attachInput", args)));
+    }
+
+    @PluginMethod
+    public void vmInputStatus(PluginCall call) {
+        call.resolve(vmResult(vmCall("inputStatus", new Bundle())));
+    }
+
+    @PluginMethod
+    public void vmInputTap(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putFloat("x", (float) call.getDouble("x", 0));
+        args.putFloat("y", (float) call.getDouble("y", 0));
+        call.resolve(vmResult(vmCall("inputTap", args)));
+    }
+
+    @PluginMethod
+    public void vmInputPath(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putString("json", call.getString("json", "{}"));
+        call.resolve(vmResult(vmCall("inputPath", args)));
+    }
+
+    @PluginMethod
+    public void vmInputSwipe(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putFloat("x1", (float) call.getDouble("x1", 0));
+        args.putFloat("y1", (float) call.getDouble("y1", 0));
+        args.putFloat("x2", (float) call.getDouble("x2", 0));
+        args.putFloat("y2", (float) call.getDouble("y2", 0));
+        args.putLong("duration", (long) call.getDouble("duration", 180));
+        call.resolve(vmResult(vmCall("inputSwipe", args)));
+    }
+
+    @PluginMethod
+    public void vmAttachReader(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putInt("process", call.getInt("process", 0));
+        call.resolve(vmResult(vmCall("attachReader", args)));
+    }
+
+    @PluginMethod
+    public void vmSessionWatch(PluginCall call) {
+        call.resolve(vmResult(vmCall("sessionWatch", new Bundle())));
+    }
+
+    @PluginMethod
+    public void vmHooks(PluginCall call) {
+        call.resolve(vmResult(vmCall("hooks", new Bundle())));
+    }
+
+    @PluginMethod
+    public void vmAttach(PluginCall call) {
+        call.resolve(vmResult(vmCall("attach", new Bundle())));
+    }
+
+    @PluginMethod
+    public void vmStatus(PluginCall call) {
+        call.resolve(vmResult(vmCall("status", new Bundle())));
+    }
+
+    @PluginMethod
+    public void vmList(PluginCall call) {
+        call.resolve(vmResult(vmCall("list", new Bundle())));
+    }
+
+    @PluginMethod
+    public void vmInstall(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putString("apkPath", call.getString("apkPath", ""));
+        call.resolve(vmResult(vmCall("install", args)));
+    }
+
+    @PluginMethod
+    public void vmLaunch(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putString("packageName", call.getString("packageName", ""));
+        args.putString("activityName", call.getString("activityName", ""));
+        call.resolve(vmResult(vmCall("launch", args)));
+    }
+
+    @PluginMethod
+    public void vmStopApp(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putString("packageName", call.getString("packageName", ""));
+        call.resolve(vmResult(vmCall("stop", args)));
+    }
+
+    @PluginMethod
+    public void vmDaemon(PluginCall call) {
+        Bundle args = new Bundle();
+        args.putBoolean("start", call.getBoolean("start", true));
+        call.resolve(vmResult(vmCall("daemon", args)));
+    }
+
+    private Bundle vmCall(String op, Bundle extras) {
+        Bundle args = extras == null ? new Bundle() : new Bundle(extras);
+        args.putString("op", op);
+        try {
+            Uri uri = Uri.parse("content://" + getContext().getPackageName() + ".vmcall");
+            Bundle response = getContext().getContentResolver().call(uri, "VM", null, args);
+            if (response != null) return response;
+            Bundle error = new Bundle();
+            error.putBoolean("ok", false);
+            error.putString("code", "NO_VM_PROVIDER");
+            error.putString("message", "VM provider did not answer");
+            return error;
+        } catch (Exception e) {
+            Bundle error = new Bundle();
+            error.putBoolean("ok", false);
+            error.putString("code", "VM_CALL_FAILED");
+            error.putString("message", String.valueOf(e.getMessage()));
+            return error;
+        }
+    }
+
+    private JSObject vmResult(Bundle response) {
+        JSObject result = new JSObject();
+        result.put("ok", response.getBoolean("ok", false));
+        result.put("code", response.getString("code", ""));
+        result.put("message", response.getString("message", ""));
+        result.put("state", response.getString("state", ""));
+        result.put("reason", response.getString("reason", ""));
+        result.put("ready", response.getBoolean("ready", false));
+        String json = response.getString("json", null);
+        if (json != null && !json.isEmpty()) {
+            try {
+                JSONObject parsed = new JSONObject(json);
+                Iterator<String> keys = parsed.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    result.put(key, jsValue(parsed.opt(key)));
+                }
+            } catch (Exception ignored) { }
+        }
+        return result;
+    }
+
+    /** Preserve arrays/objects so ball and probe lists reach JS as real arrays. */
+    private static Object jsValue(Object value) throws Exception {
+        if (value == null || value == JSONObject.NULL) return null;
+        if (value instanceof JSONObject) {
+            JSObject object = new JSObject();
+            JSONObject source = (JSONObject) value;
+            Iterator<String> keys = source.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                object.put(key, jsValue(source.opt(key)));
+            }
+            return object;
+        }
+        if (value instanceof JSONArray) {
+            JSArray array = new JSArray();
+            JSONArray source = (JSONArray) value;
+            for (int i = 0; i < source.length(); i++) array.put(jsValue(source.opt(i)));
+            return array;
+        }
+        if (value instanceof Boolean) return value;
+        if (value instanceof Number) return ((Number) value).doubleValue();
+        return String.valueOf(value);
+    }
+
     private static boolean canOverlay(Context context) {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context);
     }
@@ -278,6 +590,10 @@ public class D0JNativePlugin extends Plugin {
 
     static void notifyConfigChanged(JSObject patch) {
         notify("configChanged", patch == null ? new JSObject() : patch);
+    }
+
+    static void notifySessionEnded(String reason) {
+        notify("sessionEnded", new JSObject().put("reason", reason == null ? "manual" : reason));
     }
 
     private static void notify(String name, JSObject data) {

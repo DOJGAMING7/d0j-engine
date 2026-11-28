@@ -72,7 +72,10 @@ function Counters({ queue = {} }) {
 export default function ModMenu({
   config, setConfig, state, nativeStatus, sessionStatus, testReport,
   runningScript, runningLineScript,
-  onClose, onPlay, onStartSession, onRunScript, onStop, onOpenTable, onRunLineScript, onRunQuickTest
+  onClose, onPlay, onStartSession, onRunScript, onStop, onOpenTable, onRunLineScript, onRunQuickTest,
+  liveOverlay, onStartLiveOverlay, onStopLiveOverlay, liveOverlayInfo,
+  autoLive, autoLiveInfo, onStartLiveAuto, onStopLiveAuto, inputInfo,
+  onRequestNotifications, onRequestUsageAccess
 }) {
   const [tab, setTab] = useState('status')
   const [pos, setPos] = useState(() => ({ x: Number(config.menuX ?? 18), y: Number(config.menuY ?? 18) }))
@@ -158,10 +161,11 @@ export default function ModMenu({
         <Slider label="Line opacity" value={c.lineOpacity ?? 85} min={10} max={100} suffix="%" onChange={v => update({ lineOpacity: v, guideOpacity: v })} />
         <Slider label="Guide opacity" value={c.guideOpacity ?? 70} min={10} max={100} suffix="%" onChange={v => update({ guideOpacity: v })} />
         <div className="mm-actions">
-          <button className="mm-action" disabled={runningLineScript} onClick={onRunLineScript}><b>{runningLineScript ? 'TESTING...' : 'RUN 3 SHOTS'}</b><span>Prediction script</span></button>
+          <button className="mm-action" disabled={runningLineScript} onClick={onRunLineScript}><b>{runningLineScript ? 'TESTING...' : 'RUN ALL LINES'}</b><span>Prediction script</span></button>
           <button className="mm-action" onClick={onOpenTable}><b>OPEN DEMO</b><span>Table test</span></button>
+          <button className="mm-action" onClick={liveOverlay ? onStopLiveOverlay : onStartLiveOverlay}><b>{liveOverlay ? 'STOP LIVE LINES' : 'START LIVE LINES'}</b><span>Overlay over game</span></button>
         </div>
-        <div className="mm-note">Demo table prediction is local/simulated. Real 8BP live lines need an in-game bridge/patch.</div>
+        <div className="mm-note">Live overlay: {liveOverlay ? (liveOverlayInfo?.ok ? `${liveOverlayInfo.balls} balls · ${liveOverlayInfo.source}${liveOverlayInfo.simulated ? ' (simulated)' : ''}` : (liveOverlayInfo?.reason || 'waiting for measured state')) : 'off'}. Demo table prediction is local/simulated.</div>
       </>
     )
 
@@ -178,7 +182,9 @@ export default function ModMenu({
         <div className="mm-actions">
           <button className="mm-action primary" disabled={runningScript} onClick={onRunScript}><b>{runningScript ? 'RUNNING...' : 'RUN RATIMODA'}</b><span>State machine</span></button>
           <button className="mm-action" onClick={onStop}><b>STOP</b><span>Safe halt</span></button>
+          <button className="mm-action primary" onClick={autoLive ? onStopLiveAuto : onStartLiveAuto}><b>{autoLive ? 'STOP LIVE AUTO' : 'START LIVE AUTO'}</b><span>Measured state + input</span></button>
         </div>
+        <div className="mm-note">Live input: {inputInfo?.ready ? `ready :p${inputInfo?.process ?? '?'}` : (inputInfo?.reason || 'not attached')}. Auto: {autoLive ? (autoLiveInfo?.ok ? `${autoLiveInfo.target || 'no target'} · sent ${autoLiveInfo.stats?.sent || 0}/${autoLiveInfo.stats?.shots || 0} · ${autoLiveInfo.reason}` : (autoLiveInfo?.reason || 'waiting')) : 'off'}.</div>
       </>
     )
 
@@ -229,10 +235,16 @@ export default function ModMenu({
         <StatusRow label="power" value={`${state?.power ?? c.power}%`} />
         <StatusRow label="aimError" value={Number(state?.aimError || 0).toFixed(2)} />
         <Section title="Client Behavior" />
+        <StatusRow label="Notifications" value={nativeStatus?.notifications ? 'GRANTED' : 'NOT GRANTED'} />
+        <StatusRow label="Usage access" value={nativeStatus?.usageAccess ? 'GRANTED' : 'OPTIONAL'} />
+        <div className="mm-actions">
+          <button className="mm-action" onClick={onRequestNotifications}><b>NOTIFICATION PERM</b><span>Ask Android 13+</span></button>
+          <button className="mm-action" onClick={onRequestUsageAccess}><b>USAGE ACCESS</b><span>Auto-stop on game close</span></button>
+        </div>
         <Toggle label="Persistent notification" hint="Show D0J working status" checked={c.notificationsEnabled !== false} onChange={v => update({ notificationsEnabled: v })} />
         <Toggle label="Temp cheat notifications" hint="Finding shot, shot found, etc." checked={c.tempNotifications !== false} onChange={v => update({ tempNotifications: v })} />
         <Toggle label="Run quick test on 8BP launch" hint="Does not block launch" checked={c.runTestOnLaunch !== false} onChange={v => update({ runTestOnLaunch: v })} />
-        <Toggle label="Show test report in menu" checked={c.showTestReport !== false} onChange={v => update({ showTestReport: v })} />
+        <Toggle label="Auto-stop when 8BP closes" hint="Needs Usage access" checked={c.autoStopOnGameExit === true} onChange={v => update({ autoStopOnGameExit: v })} />
         <Section title="Clean Build / A1" />
         <StatusRow label="Home screen" value="Clean — no cheat clutter" />
         <StatusRow label="A1 policy" value="No accessibility / no auto-back" />

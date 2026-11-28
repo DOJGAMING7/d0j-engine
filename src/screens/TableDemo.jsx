@@ -19,9 +19,10 @@ function Slider({ label, value, min, max, step = 1, unit = '', disabled = false,
   )
 }
 
-export default function TableDemo({ config, setConfig, state, bridge, onBack, onLog }) {
+export default function TableDemo({ config, setConfig, state, bridge, onBack, onLog, onRunLineScript, runningLineScript }) {
   const canvasRef = useRef(null)
   const table = state.table || createDefaultTable()
+  const lines = state.lines || []
   const [aim, setAim] = useState({ x: table.cue.x, y: Math.max(80, table.cue.y - 260) })
   const [prediction, setPrediction] = useState(null)
   const [hideGuide, setHideGuide] = useState(false)
@@ -74,75 +75,130 @@ export default function TableDemo({ config, setConfig, state, bridge, onBack, on
       ctx.stroke()
     }
 
-    const showGuide = config.showLines !== false && !hideGuide && prediction
+    const showGuide = config.showLines !== false && !hideGuide && (prediction || lines.length)
     if (showGuide) {
+      const guideOpacity = Math.max(0.1, Math.min(1, (config.guideOpacity ?? config.lineOpacity ?? 70) / 100))
       ctx.save()
       ctx.globalAlpha = opacity
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
 
-      if (prediction.cuePath?.length > 1) {
-        ctx.beginPath()
-        prediction.cuePath.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))
-        ctx.strokeStyle = '#39FF14'
-        ctx.lineWidth = 2.5
-        ctx.shadowColor = '#39FF14'
-        ctx.shadowBlur = 12
-        ctx.stroke()
-      }
+      if (lines.length) {
+        // Script-generated lines: one cue path + one target path per ball,
+        // including the white ball's path to every ghost position.
+        lines.forEach((line, index) => {
+          const color = index % 2 ? '#B6FF9E' : '#39FF14'
+          if (line.cuePath?.length > 1) {
+            ctx.beginPath()
+            line.cuePath.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))
+            ctx.strokeStyle = color
+            ctx.lineWidth = 2.5
+            ctx.shadowColor = color
+            ctx.shadowBlur = 10
+            ctx.stroke()
+            ctx.shadowBlur = 0
+          }
+          if (line.targetPath?.length > 1) {
+            ctx.beginPath()
+            line.targetPath.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))
+            ctx.strokeStyle = color
+            ctx.globalAlpha = opacity * guideOpacity
+            ctx.lineWidth = 1.5
+            ctx.setLineDash([7, 6])
+            ctx.shadowBlur = 6
+            ctx.stroke()
+            ctx.setLineDash([])
+            ctx.shadowBlur = 0
+            ctx.globalAlpha = opacity
+          }
+          if (line.ghost) {
+            ctx.beginPath()
+            ctx.arc(line.ghost.x, line.ghost.y, r, 0, Math.PI * 2)
+            ctx.strokeStyle = '#00E676'
+            ctx.lineWidth = 2
+            ctx.setLineDash([4, 4])
+            ctx.stroke()
+            ctx.setLineDash([])
+          }
+          if (config.targetPreview !== false && line.pocket) {
+            ctx.beginPath()
+            ctx.arc(line.pocket.x, line.pocket.y, table.pocketRadius + 12, 0, Math.PI * 2)
+            ctx.strokeStyle = color
+            ctx.lineWidth = 2
+            ctx.stroke()
+          }
+          if (line.target) {
+            ctx.fillStyle = color
+            ctx.font = '700 11px system-ui, sans-serif'
+            ctx.fillText(String(line.ballId), line.target.x + r + 5, line.target.y - r - 4)
+          }
+        })
+      } else if (prediction) {
+        if (prediction.cuePath?.length > 1) {
+          ctx.beginPath()
+          prediction.cuePath.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))
+          ctx.strokeStyle = '#39FF14'
+          ctx.lineWidth = 2.5
+          ctx.shadowColor = '#39FF14'
+          ctx.shadowBlur = 12
+          ctx.stroke()
+        }
 
-      if (prediction.targetPath?.length > 1) {
-        ctx.beginPath()
-        prediction.targetPath.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))
-        ctx.strokeStyle = '#B6FF9E'
-        ctx.lineWidth = 1.5
-        ctx.setLineDash([7, 6])
-        ctx.shadowBlur = 6
-        ctx.stroke()
-        ctx.setLineDash([])
-      }
+        if (prediction.targetPath?.length > 1) {
+          ctx.beginPath()
+          prediction.targetPath.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))
+          ctx.strokeStyle = '#B6FF9E'
+          ctx.lineWidth = 1.5
+          ctx.setLineDash([7, 6])
+          ctx.shadowBlur = 6
+          ctx.stroke()
+          ctx.setLineDash([])
+        }
 
-      if (prediction.ghost) {
-        ctx.beginPath()
-        ctx.arc(prediction.ghost.x, prediction.ghost.y, r, 0, Math.PI * 2)
-        ctx.strokeStyle = '#00E676'
-        ctx.lineWidth = 2
-        ctx.setLineDash([4, 4])
-        ctx.stroke()
-        ctx.setLineDash([])
-      }
+        if (prediction.ghost) {
+          ctx.beginPath()
+          ctx.arc(prediction.ghost.x, prediction.ghost.y, r, 0, Math.PI * 2)
+          ctx.strokeStyle = '#00E676'
+          ctx.lineWidth = 2
+          ctx.setLineDash([4, 4])
+          ctx.stroke()
+          ctx.setLineDash([])
+        }
 
-      if (config.targetPreview !== false && prediction.pocket) {
-        ctx.beginPath()
-        ctx.arc(prediction.pocket.x, prediction.pocket.y, table.pocketRadius + 12, 0, Math.PI * 2)
-        ctx.strokeStyle = '#39FF14'
-        ctx.lineWidth = 2
-        ctx.stroke()
+        if (config.targetPreview !== false && prediction.pocket) {
+          ctx.beginPath()
+          ctx.arc(prediction.pocket.x, prediction.pocket.y, table.pocketRadius + 12, 0, Math.PI * 2)
+          ctx.strokeStyle = '#39FF14'
+          ctx.lineWidth = 2
+          ctx.stroke()
 
-        ctx.fillStyle = '#B6FF9E'
-        ctx.font = '600 12px system-ui, sans-serif'
-        ctx.fillText(prediction.pocket.id, prediction.pocket.x + 24, prediction.pocket.y + 4)
-      }
+          ctx.fillStyle = '#B6FF9E'
+          ctx.font = '600 12px system-ui, sans-serif'
+          ctx.fillText(prediction.pocket.id, prediction.pocket.x + 24, prediction.pocket.y + 4)
+        }
 
-      if (flash && prediction.ghost) {
-        ctx.beginPath()
-        ctx.arc(prediction.ghost.x, prediction.ghost.y, r + 16, 0, Math.PI * 2)
-        ctx.strokeStyle = '#FFFFFF'
-        ctx.lineWidth = 3
-        ctx.stroke()
+        if (flash && prediction.ghost) {
+          ctx.beginPath()
+          ctx.arc(prediction.ghost.x, prediction.ghost.y, r + 16, 0, Math.PI * 2)
+          ctx.strokeStyle = '#FFFFFF'
+          ctx.lineWidth = 3
+          ctx.stroke()
+        }
       }
       ctx.restore()
 
-      const dir = prediction.dir
-      const stickStart = { x: table.cue.x - dir.x * 24, y: table.cue.y - dir.y * 24 }
-      const stickEnd = { x: table.cue.x - dir.x * 120, y: table.cue.y - dir.y * 120 }
-      ctx.beginPath()
-      ctx.moveTo(stickStart.x, stickStart.y)
-      ctx.lineTo(stickEnd.x, stickEnd.y)
-      ctx.strokeStyle = 'rgba(182,255,158,.55)'
-      ctx.lineWidth = 5
-      ctx.lineCap = 'round'
-      ctx.stroke()
+      if (prediction?.dir) {
+        const dir = prediction.dir
+        const stickStart = { x: table.cue.x - dir.x * 24, y: table.cue.y - dir.y * 24 }
+        const stickEnd = { x: table.cue.x - dir.x * 120, y: table.cue.y - dir.y * 120 }
+        ctx.beginPath()
+        ctx.moveTo(stickStart.x, stickStart.y)
+        ctx.lineTo(stickEnd.x, stickEnd.y)
+        ctx.strokeStyle = 'rgba(182,255,158,.55)'
+        ctx.lineWidth = 5
+        ctx.lineCap = 'round'
+        ctx.stroke()
+      }
     }
 
     for (const ball of [...(table.balls || []), { ...table.cue, id: 'CUE', color: '#F5FFF5' }]) {
@@ -162,7 +218,7 @@ export default function TableDemo({ config, setConfig, state, bridge, onBack, on
         ctx.fillText(ball.id, ball.x, ball.y + 0.5)
       }
     }
-  }, [state.table, prediction, config.showLines, config.targetPreview, config.lineOpacity, hideGuide, flash])
+  }, [state.table, state.lines, prediction, config.showLines, config.targetPreview, config.lineOpacity, config.guideOpacity, hideGuide, flash])
 
   const setAimFromEvent = e => {
     const canvas = canvasRef.current
@@ -198,6 +254,7 @@ export default function TableDemo({ config, setConfig, state, bridge, onBack, on
       turn: 'you',
       result: null
     })
+    if (bridge.api.clearLines) await bridge.api.clearLines()
     setAim({ x: 300, y: 180 })
     setHideGuide(false)
     onLog('LINE TEST: table reset')
@@ -218,6 +275,7 @@ export default function TableDemo({ config, setConfig, state, bridge, onBack, on
         <span><small>POCKET</small><b>{prediction?.pocket?.id || '—'}</b></span>
         <span><small>POWER</small><b>{config.power}%</b></span>
         <span><small>SPIN</small><b>{Number(config.lineSpin ?? 0).toFixed(2)}</b></span>
+        <span><small>LINES</small><b>{lines.length}/{table.balls?.length || 0}</b></span>
       </div>
 
       <canvas
@@ -238,7 +296,13 @@ export default function TableDemo({ config, setConfig, state, bridge, onBack, on
           <button className="btn primary wide" onClick={shoot}>SHOOT</button>
           <button className="btn ghost" onClick={reset}>RESET TABLE</button>
         </div>
-        <p className="note">Simulated bridge. Same prediction engine is exported for the 8BP overlay when validated.</p>
+        <div className="btn-row">
+          <button className="btn primary wide" disabled={runningLineScript} onClick={onRunLineScript}>
+            {runningLineScript ? 'PLANNING…' : 'RUN ALL LINES'}
+          </button>
+          <button className="btn ghost" onClick={() => bridge.api.clearLines?.()}>CLEAR LINES</button>
+        </div>
+        <p className="note">Simulated bridge. All cue and object-ball lines come from prediction-lines.js; real 8BP needs an in-game bridge.</p>
       </div>
     </main>
   )
