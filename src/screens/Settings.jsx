@@ -49,6 +49,7 @@ export default function Settings({
   const [apkUrl, setApkUrl] = useState(settings.apkUrl || '')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [hostingMsg, setHostingMsg] = useState('')
   const [vmPath, setVmPath] = useState('')
   const [vmInfo, setVmInfo] = useState(null)
   const [vmApps, setVmApps] = useState([])
@@ -490,6 +491,13 @@ export default function Settings({
             <button className="btn ghost" disabled={!crashLog} onClick={copyCrash}>{crashCopied ? 'COPIED ✓' : 'COPY CRASH LOG'}</button>
             <button className="btn ghost" disabled={!crashLog} onClick={async () => { await native.clearLastCrash().catch(() => {}); setCrashLog(''); setCrashCopied(false) }}>Clear</button>
           </div>
+          <div className="btn-row">
+            <button className="btn ghost" onClick={async () => {
+              const res = await native.vmResetHosting().catch(() => ({ ok: false }))
+              setHostingMsg(res?.ok ? 'In-window hosting retry enabled' : `Reset failed: ${res?.reason || res?.error || 'unknown'}`)
+            }}>Reset hosting retry</button>
+          </div>
+          <div className="meta-line">{hostingMsg || 'Use after a hosting failure, before trying START SESSION again.'}</div>
         </section>
 
         <section className="panel">
@@ -497,7 +505,7 @@ export default function Settings({
           <div className="meta-line">SNAKE ENGINE · private single-user build</div>
           <div className="meta-line">A1: No Accessibility, no purchase guard, no auto-back.</div>
           <div className="meta-line">2B: in-window controls only; no SYSTEM_ALERT_WINDOW, no MediaProjection, no VPN.</div>
-          <div className="meta-line">Live lines: on-device screen reading during an active session. Demo table stays local/simulated.</div>
+          <div className="meta-line">Live lines: local preview only. No screen capture or projection is used; real lines require measured VM state.</div>
         </section>
       </div>
     </main>

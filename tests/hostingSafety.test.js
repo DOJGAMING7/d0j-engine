@@ -1,0 +1,84 @@
+// Static guards for Track A: a failed in-window hosting attempt must never
+// kill the app, must be remembered across processes, and must fall back to an
+// honest external launch with a durable crash report.
+
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const root = resolve(import.meta.dirname, '..')
+const read = relative => readFileSync(resolve(root, relative), 'utf8')
+const javaDir = 'android/app/src/main/java/com/d0j/engine/'
+
+test('hosting failures are contained instead of killing the process', () => {
+  const hook = read(javaDir + 'vm/HookInstrumentation.java')
+  assert.match(hook, /catch \(ClassNotFoundException e\)/)
+  assert.match(hook, /catch \(Throwable e\)[\s\S]*hostingFailed/)
+  assert.match(hook, /callActivityOnCreate[\s\S]*catch \(Throwable e\)/)
+  assert.match(hook, /hostedLifecycleFailed/)
+  assert.match(hook, /VMHosting\.markDisabled/)
+  assert.ok(hook.includes('callActivityOnResume'))
+  assert.ok(hook.includes('callActivityOnStart'))
+
+  const proxy = read(javaDir + 'vm/VMProxyActivity.java')
+  assert.ok(proxy.includes('VMHosting.isDisabled(this)'))
+  assert.ok(proxy.includes('In-window hosting unavailable'))
+})
+
+test('one-shot hosting flag is durable and shared across processes', () => {
+  const hosting = read(javaDir + 'vm/VMHosting.java')
+  assert.match(hosting, /class VMHosting/)
+  assert.match(hosting, /FileOutputStream/)
+  assert.match(hosting, /getFD\(\)\.sync\(\)/)
+  assert.match(hosting, /isDisabled\(Context/)
+  assert.match(hosting, /markDisabled\(Context/)
+
+  const core = read(javaDir + 'vm/VMCore.java')
+  assert.ok(core.includes('VMHosting.isDisabled(app)'))
+  assert.ok(core.includes('"HOSTING_DISABLED"'))
+})
+
+test('crash reports survive an immediate child-process death', () => {
+  const app = read(javaDir + 'D0JApp.java')
+  assert.match(app, /setStringSync/)
+  assert.match(app, /last_crash\.txt/)
+  assert.match(app, /getFD\(\)\.sync\(\)/)
+  assert.match(app, /Application\.getProcessName\(\)/)
+
+  const prefs = read(javaDir + 'D0JPrefs.java')
+  assert.match(prefs, /setStringSync\(Context context, String key, String value\)[\s\S]*\.commit\(\)/)
+
+  const plugin = read(javaDir + 'D0JNativePlugin.java')
+  assert.ok(plugin.includes('crashFileText(getContext())'))
+  assert.ok(plugin.includes('public static void notifyHostingFailed'))
+
+  const service = read(javaDir + 'D0JSessionService.java')
+  assert.ok(service.includes('ACTION_HOSTING_FAILED'))
+  assert.ok(service.includes('notifyHostingFailed'))
+})
+
+test('the UI falls back externally and never claims a live hosted game', () => {
+  const app = read('src/App.jsx')
+  assert.ok(app.includes("addListener('hostingFailed'"))
+  assert.ok(app.includes('native.launchGame(pkg)'))
+  assert.ok(app.includes('In-window hosting unavailable'))
+
+  const settings = read('src/screens/Settings.jsx')
+  assert.ok(!settings.includes('on-device screen reading'))
+  assert.ok(settings.includes('No screen capture or projection is used'))
+  assert.ok(settings.includes('Reset hosting retry'))
+})
+
+test('hosting retry can be re-enabled without reinstalling', () => {
+  const provider = read(javaDir + 'vm/SystemCallProvider.java')
+  assert.ok(provider.includes('"resetHosting"'))
+  assert.ok(provider.includes('VMHosting.reset(getContext())'))
+
+  const plugin = read(javaDir + 'D0JNativePlugin.java')
+  assert.ok(plugin.includes('public void vmResetHosting(PluginCall call)'))
+
+  const nativeJs = read('src/lib/native.js')
+  assert.ok(nativeJs.includes('vmResetHosting:'))
+  assert.ok(nativeJs.includes("call('vmResetHosting')"))
+})

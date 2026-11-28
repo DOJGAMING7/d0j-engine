@@ -35,7 +35,9 @@ export function snapshotStatus(snapshot) {
     pockets: pockets.length,
     source: String(snapshot.source || 'unknown'),
     confidence: Number.isFinite(number(snapshot.confidence)) ? number(snapshot.confidence) : 0,
-    simulated: String(snapshot.source || '').includes('demo')
+    // Respect an explicit flag: a local preview may be tagged with a VM-shaped
+    // source while still being simulated. Never label it as live.
+    simulated: snapshot.simulated === true || String(snapshot.source || '').includes('demo')
   }
 }
 

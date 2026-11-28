@@ -41,6 +41,11 @@ public final class D0JPrefs {
         prefs(context).edit().putString(key, value).apply();
     }
 
+    /** Synchronous write for crash paths where the process dies immediately. */
+    public static void setStringSync(Context context, String key, String value) {
+        prefs(context).edit().putString(key, value).commit();
+    }
+
     public static String getString(Context context, String key, String fallback) {
         return prefs(context).getString(key, fallback);
     }

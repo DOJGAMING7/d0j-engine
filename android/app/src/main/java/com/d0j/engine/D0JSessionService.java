@@ -31,6 +31,7 @@ public class D0JSessionService extends Service {
     public static final String ACTION_SHOW_TOAST = "com.d0j.engine.action.SHOW_TOAST";
     public static final String ACTION_UPDATE_LINES = "com.d0j.engine.action.UPDATE_LINES";
     public static final String ACTION_CLEAR_LINES = "com.d0j.engine.action.CLEAR_LINES";
+    public static final String ACTION_HOSTING_FAILED = "com.d0j.engine.action.HOSTING_FAILED";
 
     private static final String CHANNEL_ID = "d0j_session";
     private static final int NOTIFICATION_ID = 7701;
@@ -96,6 +97,12 @@ public class D0JSessionService extends Service {
             case ACTION_OPEN_MENU:
                 openApp();
                 return START_STICKY;
+            case ACTION_HOSTING_FAILED:
+                D0JGameHud.pushLines(this, "{}");
+                D0JNativePlugin.notifyHostingFailed(
+                        intent == null ? "" : intent.getStringExtra("reason"));
+                stopSelf();
+                return START_NOT_STICKY;
             case ACTION_START_SESSION:
             default:
                 startSessionInternal(intent);

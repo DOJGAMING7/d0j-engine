@@ -708,6 +708,18 @@ function Main() {
         say(`SESSION ENDED: ${data?.reason || 'closed'}`, 'stopped')
         if (overlayMode) window.close?.()
       }))
+      handles.push(await native.addListener('hostingFailed', data => {
+        const reason = data?.reason || 'HOSTING_UNAVAILABLE'
+        say(`In-window hosting unavailable · ${reason}`, 'error')
+        setGuardInfo(prev => ({ ...(prev || {}), verdict: 'HOSTING_UNAVAILABLE', reason }))
+        const pkg = data?.packageName || GAME_PACKAGES.eightBallPool
+        native.launchGame(pkg).then(res => {
+          say(res?.ok
+            ? `Session active · ${pkg} opened externally (in-window hosting unavailable)`
+            : `External launch failed: ${res?.error || 'unknown'}`,
+          res?.ok ? 'ready' : 'error')
+        }).catch(() => {})
+      }))
       handles.push(await native.addListener('configChanged', patch => {
         if (!patch || typeof patch !== 'object') return
         const nextPatch = { ...patch }

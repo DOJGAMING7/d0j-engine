@@ -65,6 +65,7 @@ public class D0JNativePlugin extends Plugin {
     public void getLastCrash(PluginCall call) {
         JSObject res = new JSObject();
         String text = D0JPrefs.getString(getContext(), D0JPrefs.LAST_CRASH, "");
+        if (text == null || text.trim().isEmpty()) text = crashFileText(getContext());
         res.put("ok", text != null && !text.trim().isEmpty());
         res.put("text", text == null ? "" : text);
         call.resolve(res);
@@ -72,10 +73,32 @@ public class D0JNativePlugin extends Plugin {
 
     @PluginMethod
     public void clearLastCrash(PluginCall call) {
-        D0JPrefs.setString(getContext(), D0JPrefs.LAST_CRASH, "");
+        D0JPrefs.setStringSync(getContext(), D0JPrefs.LAST_CRASH, "");
+        try { crashFile(getContext()).delete(); } catch (Exception ignored) { }
         JSObject res = new JSObject();
         res.put("ok", true);
         call.resolve(res);
+    }
+
+    private static File crashFile(Context context) {
+        return new File(context.getFilesDir(), "last_crash.txt");
+    }
+
+    private static String crashFileText(Context context) {
+        try {
+            File file = crashFile(context);
+            if (!file.isFile()) return "";
+            byte[] bytes = new byte[(int) Math.min(file.length(), 65536)];
+            java.io.FileInputStream in = new java.io.FileInputStream(file);
+            try {
+                int read = in.read(bytes);
+                return read > 0 ? new String(bytes, 0, read, "UTF-8") : "";
+            } finally {
+                in.close();
+            }
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     @PluginMethod
@@ -453,6 +476,11 @@ public class D0JNativePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void vmResetHosting(PluginCall call) {
+        call.resolve(vmResult(vmCall("resetHosting", new Bundle())));
+    }
+
+    @PluginMethod
     public void vmStatus(PluginCall call) {
         call.resolve(vmResult(vmCall("status", new Bundle())));
     }
@@ -710,6 +738,12 @@ public class D0JNativePlugin extends Plugin {
 
     static void notifySessionEnded(String reason) {
         notify("sessionEnded", new JSObject().put("reason", reason == null ? "manual" : reason));
+    }
+
+    public static void notifyHostingFailed(String reason) {
+        JSObject data = new JSObject();
+        data.put("reason", reason == null ? "UNKNOWN" : reason);
+        notify("hostingFailed", data);
     }
 
     private static void notify(String name, JSObject data) {

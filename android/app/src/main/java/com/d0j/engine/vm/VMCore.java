@@ -62,6 +62,9 @@ public final class VMCore {
     /** Instance already created on this process, or null before bootstrap. */
     public static VMCore peek() { return instance; }
 
+    /** Application context for reporting hosting failures across processes. */
+    public Context context() { return app; }
+
     public static VMCore get(Context context) {
         VMCore value = instance;
         if (value == null) {
@@ -198,6 +201,7 @@ public final class VMCore {
 
     /** Builds the game classloader inside a hosted child process without starting an Activity. */
     public boolean prepare(String packageName) throws VMException {
+        if (VMHosting.isDisabled(app)) return false;
         VMRegisteredApp entry = apps.get(packageName == null ? "" : packageName);
         if (entry == null) return false;
         File outDex = new File(dexDir, safe(packageName));
@@ -219,6 +223,9 @@ public final class VMCore {
     }
 
     public JSONObject launch(String packageName, String activityName) throws VMException {
+        if (VMHosting.isDisabled(app)) {
+            throw new VMException("HOSTING_DISABLED", VMHosting.reason(app));
+        }
         VMRegisteredApp entry = apps.get(packageName);
         if (entry == null) throw new VMException("NOT_INSTALLED", "Not installed in VM: " + packageName);
 
@@ -266,8 +273,12 @@ public final class VMCore {
             result.put("state", instrumentation.isReady() ? "LAUNCH_ATTEMPTED" : "CLASSLOADER_ONLY");
             if (instrumentation.isReady()) {
                 boolean started = instrumentation.startActivity(app, entry, target, entry.processIndex);
+                if (VMHosting.isDisabled(app)) {
+                    started = false;
+                    result.put("reason", VMHosting.reason(app));
+                }
                 result.put("started", started);
-                if (!started) result.put("state", "START_FAILED");
+                if (!started) result.put("state", VMHosting.isDisabled(app) ? "HOSTING_DISABLED" : "START_FAILED");
             } else {
                 result.put("started", false);
             }

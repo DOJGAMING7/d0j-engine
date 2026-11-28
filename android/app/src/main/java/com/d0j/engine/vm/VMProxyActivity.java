@@ -5,6 +5,8 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.widget.TextView;
 
 import com.d0j.engine.D0JGameHud;
@@ -25,6 +27,19 @@ public class VMProxyActivity extends Activity {
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         VMLifecycleMonitor.install(this, processIndex());
+        if (VMHosting.isDisabled(this)) {
+            TextView view = new TextView(this);
+            view.setText("In-window hosting unavailable\nOpening game externally");
+            view.setTextColor(Color.parseColor("#9A9AA2"));
+            view.setBackgroundColor(Color.parseColor("#0B0E0F"));
+            view.setPadding(32, 48, 32, 48);
+            view.setTextSize(15f);
+            setContentView(view);
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override public void run() { finish(); }
+            }, 800);
+            return;
+        }
         Intent incoming = getIntent();
         String pkg = incoming == null ? null : incoming.getStringExtra("vmPackage");
         String act = incoming == null ? null : incoming.getStringExtra("vmActivity");

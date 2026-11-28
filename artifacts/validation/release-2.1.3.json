@@ -1,0 +1,205 @@
+{
+  "ok": true,
+  "liveReady": false,
+  "generatedAt": "2026-11-28T11:46:42.015Z",
+  "version": "2.1.3",
+  "checks": [
+    {
+      "name": "package",
+      "ok": true,
+      "detail": "package 2.1.3 = gradle 2.1.3 (code 9)",
+      "version": "2.1.3",
+      "versionName": "2.1.3",
+      "versionCode": 9
+    },
+    {
+      "name": "scripts",
+      "ok": true,
+      "detail": "2 scripts byte-identical in 4 locations",
+      "items": [
+        {
+          "id": "autoplay-ratimoda",
+          "file": "scripts/autoplay-ratimoda.js",
+          "expected": "d29a5f851bf2142566577b84878e792c7698c04298c64bec36f5d993c4f34ef2",
+          "copies": [
+            {
+              "base": "scripts",
+              "path": "/data/user/0/ai.antigem/files/home/projects/coding_test/d0j-engine/scripts/autoplay-ratimoda.js",
+              "hash": "d29a5f851bf2142566577b84878e792c7698c04298c64bec36f5d993c4f34ef2"
+            },
+            {
+              "base": "public/scripts",
+              "path": "/data/user/0/ai.antigem/files/home/projects/coding_test/d0j-engine/public/scripts/autoplay-ratimoda.js",
+              "hash": "d29a5f851bf2142566577b84878e792c7698c04298c64bec36f5d993c4f34ef2"
+            },
+            {
+              "base": "dist/scripts",
+              "path": "/data/user/0/ai.antigem/files/home/projects/coding_test/d0j-engine/dist/scripts/autoplay-ratimoda.js",
+              "hash": "d29a5f851bf2142566577b84878e792c7698c04298c64bec36f5d993c4f34ef2"
+            },
+            {
+              "base": "android/app/src/main/assets/public/scripts",
+              "path": "/data/user/0/ai.antigem/files/home/projects/coding_test/d0j-engine/android/app/src/main/assets/public/scripts/autoplay-ratimoda.js",
+              "hash": "d29a5f851bf2142566577b84878e792c7698c04298c64bec36f5d993c4f34ef2"
+            }
+          ],
+          "ok": true
+        },
+        {
+          "id": "prediction-lines",
+          "file": "scripts/prediction-lines.js",
+          "expected": "a3f3ae3b8ff6d1ebf6a9da41b8d1304878d1cd95f166e948dde57f72eed811eb",
+          "copies": [
+            {
+              "base": "scripts",
+              "path": "/data/user/0/ai.antigem/files/home/projects/coding_test/d0j-engine/scripts/prediction-lines.js",
+              "hash": "a3f3ae3b8ff6d1ebf6a9da41b8d1304878d1cd95f166e948dde57f72eed811eb"
+            },
+            {
+              "base": "public/scripts",
+              "path": "/data/user/0/ai.antigem/files/home/projects/coding_test/d0j-engine/public/scripts/prediction-lines.js",
+              "hash": "a3f3ae3b8ff6d1ebf6a9da41b8d1304878d1cd95f166e948dde57f72eed811eb"
+            },
+            {
+              "base": "dist/scripts",
+              "path": "/data/user/0/ai.antigem/files/home/projects/coding_test/d0j-engine/dist/scripts/prediction-lines.js",
+              "hash": "a3f3ae3b8ff6d1ebf6a9da41b8d1304878d1cd95f166e948dde57f72eed811eb"
+            },
+            {
+              "base": "android/app/src/main/assets/public/scripts",
+              "path": "/data/user/0/ai.antigem/files/home/projects/coding_test/d0j-engine/android/app/src/main/assets/public/scripts/prediction-lines.js",
+              "hash": "a3f3ae3b8ff6d1ebf6a9da41b8d1304878d1cd95f166e948dde57f72eed811eb"
+            }
+          ],
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "webAssets",
+      "ok": true,
+      "detail": "9 built files copied to native assets",
+      "files": 9,
+      "mismatches": []
+    },
+    {
+      "name": "java",
+      "ok": true,
+      "detail": "48 Java sources balanced, in-window HUD, no overlay/capture/VPN/accessibility",
+      "files": 48,
+      "missing": [],
+      "unbalanced": [],
+      "accessibility": false,
+      "symbols": [],
+      "forbidden": []
+    },
+    {
+      "name": "manifest",
+      "ok": true,
+      "detail": "daemon, 4 child processes, mem/input providers, notification-only session declared",
+      "missing": [],
+      "forbidden": false
+    },
+    {
+      "name": "offline",
+      "ok": true,
+      "detail": "2 scripts bundled byte-identical; local-only runner; no key gate; no overlay/capture/VPN",
+      "bundled": true,
+      "predictionHash": "a3f3ae3b8ff6d1ebf6a9da41b8d1304878d1cd95f166e948dde57f72eed811eb",
+      "failures": []
+    },
+    {
+      "name": "bindings",
+      "ok": true,
+      "honest": true,
+      "measured": false,
+      "detail": "honest UNMEASURED for com.miniclip.eightballpool 56.34.0 (code 4064)",
+      "path": "android/app/src/main/assets/vm/bindings/8bp-56.34.0.json",
+      "data": {
+        "packageName": "com.miniclip.eightballpool",
+        "versionName": "56.34.0",
+        "versionCode": 4064,
+        "status": "UNMEASURED",
+        "moduleName": "",
+        "ballIdSource": "UNMAPPED",
+        "usable": false,
+        "cueXOffset": null,
+        "cueYOffset": null,
+        "ballsArrayOffset": null,
+        "ballStride": null,
+        "ballXOffset": null,
+        "ballYOffset": null,
+        "ballActiveOffset": null,
+        "pocketsArrayOffset": null,
+        "pocketStride": null,
+        "pocketXOffset": null,
+        "pocketYOffset": null,
+        "turnOffset": null,
+        "powerOffset": null,
+        "aimXOffset": null,
+        "aimYOffset": null
+      }
+    },
+    {
+      "name": "versionMatrix",
+      "ok": true,
+      "versions": [
+        {
+          "id": "eightBallPool",
+          "packageName": "com.miniclip.eightballpool",
+          "build": "56.34.0",
+          "gates": {
+            "launcher": true,
+            "bindingsMeasured": false,
+            "hookVerified": false,
+            "liveLinesVerifiedOnDevice": false
+          }
+        },
+        {
+          "id": "carromPool",
+          "packageName": "com.miniclip.carrom",
+          "build": "launcher profile",
+          "gates": {
+            "launcher": true,
+            "bindingsMeasured": false,
+            "hookVerified": false,
+            "liveLinesVerifiedOnDevice": false
+          }
+        },
+        {
+          "id": "soccerStars",
+          "packageName": "com.miniclip.soccerstars",
+          "build": "launcher profile",
+          "gates": {
+            "launcher": true,
+            "bindingsMeasured": false,
+            "hookVerified": false,
+            "liveLinesVerifiedOnDevice": false
+          }
+        }
+      ],
+      "hookVerified": false,
+      "detail": "3 version profiles; hook stub until device attach"
+    }
+  ],
+  "blockers": [],
+  "limits": [
+    "Live 8BP offsets are UNMEASURED — live lines/autoplay cannot be trusted yet.",
+    "Framework hook is a stub until attach succeeds on a device.",
+    "No APK compilation or device verification is possible on this bench (no JDK/SDK/device)."
+  ],
+  "deviceChecklist": [
+    "Install the signed APK over v24+ using the stable key (no root required).",
+    "Grant notification permission; confirm no Display-over-other-apps or VPN prompt appears.",
+    "Start session and confirm the installed Play Store 8BP opens through this client.",
+    "Confirm the floating icon and menu appear only inside the hosted game window.",
+    "VM status must report HOOK_ATTACHED, not STUB_ONLY.",
+    "Capture state with probe/diff and save measured bindings for com.miniclip.eightballpool 56.34.0 (code 4064) only.",
+    "Bindings status must become MEASURED before trusting any live line.",
+    "Calibrate table rect on screen; verify cue/target/ghost/pocket lines align.",
+    "Bind a hosted activity; verify inputStatus INPUT_READY before autoplay.",
+    "Fire one manual shot, then one auto shot; confirm sent counter increments.",
+    "Exit the game and confirm the in-window controls and lines close within 8 seconds.",
+    "Repeat for every target build; do not reuse offsets across versions."
+  ]
+}

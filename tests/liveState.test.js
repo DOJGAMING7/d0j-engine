@@ -26,6 +26,16 @@ test('snapshot status rejects unmeasured state instead of inventing it', () => {
   assert.equal(snapshotStatus(demoSnapshot()).simulated, true)
 })
 
+test('explicit simulated flag is never relabelled as live by a VM-shaped source', () => {
+  const sample = {
+    ...demoSnapshot(),
+    source: 'vm',
+    simulated: true
+  }
+  assert.equal(snapshotStatus(sample).simulated, true)
+  assert.equal(snapshotStatus({ ...sample, simulated: false, source: 'vm-measured' }).simulated, false)
+})
+
 test('mapped snapshots feed the real prediction planner', () => {
   const table = mapSnapshotToTable(demoSnapshot())
   assert.deepEqual(table.cue, { x: 300, y: 660 })
