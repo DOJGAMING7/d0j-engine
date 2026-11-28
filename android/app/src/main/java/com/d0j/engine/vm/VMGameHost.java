@@ -187,11 +187,25 @@ public final class VMGameHost {
             VMHosting.markStage(report, "THEME_MISSING");
             return;
         }
+        Object originalBase = null;
         try {
+            originalBase = getField(activity, "mBase");
+        } catch (Throwable ignored) { }
+        try {
+            // setTheme() calls getResources() immediately. Before attach there
+            // is no base context, so supply a temporary game-aware one, then
+            // restore the original so attach() still succeeds.
+            Prepared prepared = get(packageName);
+            if (prepared != null) {
+                setField(activity, "mBase", wrap(prepared, report));
+                VMHosting.markStage(report, "THEME_TEMP_BASE_SET");
+            }
             activity.setTheme(theme);
             VMHosting.markStage(report, "THEME_PREATTACH_SET:" + theme);
         } catch (Throwable e) {
             VMHosting.markStage(report, "THEME_PREATTACH_FAIL:" + describe(e));
+        } finally {
+            try { setField(activity, "mBase", originalBase); } catch (Throwable ignored) { }
         }
     }
 
@@ -221,6 +235,20 @@ public final class VMGameHost {
         getInfo.setAccessible(true);
         Object loaded = getInfo.invoke(thread, prepared.context.getApplicationInfo(), defaultCompat.get(null));
         setField(activity, "mPackageInfo", loaded);
+    }
+
+    private static Object getField(Object target, String name) throws Exception {
+        Class<?> type = target.getClass();
+        while (type != null) {
+            try {
+                Field field = type.getDeclaredField(name);
+                field.setAccessible(true);
+                return field.get(target);
+            } catch (NoSuchFieldException e) {
+                type = type.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(name);
     }
 
     private static void setField(Object target, String name, Object value) throws Exception {

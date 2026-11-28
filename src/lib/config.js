@@ -49,10 +49,10 @@ export const DEFAULT_CONFIG = {
   topSpin: 0,
   // Session/UX
   sessionActive: false,
-  // In-window hosting of the unmodified Play Store game is not stable on this
-  // device. START SESSION opens the installed game externally; the mod menu
-  // and simulated preview lines stay inside this client.
-  inWindowHosting: false,
+  // In-window hosting is attempted so the floating mod menu can be attached
+  // to the game Activity. If it is not stable, START SESSION falls back to an
+  // honest external launch without claiming a live hosted game.
+  inWindowHosting: true,
   notificationsEnabled: true,
   tempNotifications: true,
   runTestOnLaunch: true,

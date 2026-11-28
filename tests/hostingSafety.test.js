@@ -72,18 +72,18 @@ test('the UI falls back externally and never claims a live hosted game', () => {
   assert.ok(settings.includes('Reset hosting retry'))
 })
 
-test('START SESSION is a clean external launch by default', () => {
+test('START SESSION attempts in-window hosting for the floating menu', () => {
   const config = read('src/lib/config.js')
-  assert.match(config, /inWindowHosting: false/)
+  assert.match(config, /inWindowHosting: true/)
 
   const app = read('src/App.jsx')
-  assert.match(app, /config\.inWindowHosting === true/)
+  assert.match(app, /config\.inWindowHosting !== false/)
+  assert.match(app, /native\.vmLaunch\(pkg/)
   assert.match(app, /native\.launchGame\(pkg\)/)
-  assert.match(app, /opened externally · mod menu in SNAKE ENGINE \(local preview\)/)
-  assert.ok(!app.includes('In-window hosting requested for') || app.includes('config.inWindowHosting === true'))
+  assert.match(app, /in-window hosting unavailable/)
 
   const home = read('src/screens/Home.jsx')
-  assert.match(home, /mod menu stays in this client/)
+  assert.match(home, /floating mod menu/)
 })
 
 test('hosting retry can be re-enabled without reinstalling', () => {

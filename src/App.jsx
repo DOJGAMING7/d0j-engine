@@ -511,12 +511,11 @@ function Main() {
       .catch(e => ({ ok: false, error: String(e?.message || e) }))
     if (session?.ok) setConfigState(prev => ({ ...prev, sessionActive: true }))
 
-    // Default: open the real installed game externally. The mod menu lives in
-    // this client and is honestly labelled as a local preview. In-window
-    // hosting is opt-in only (diagnostics), so a normal START never causes a
-    // failed host attempt, black screen, or launcher bounce.
+    // Try in-window hosting so the floating mod menu can attach to the game
+    // Activity. If the framework cannot host this game, fall back to an
+    // honest external launch and never claim a live in-window game.
     let hosted = null
-    if (native.isNative() && config.inWindowHosting === true) {
+    if (native.isNative() && config.inWindowHosting !== false) {
       hosted = await native.vmLaunch(pkg, discovery?.launchActivity || '').catch(() => ({ ok: false }))
       if (hosted?.ok && hosted?.started === true) {
         say(`In-window hosting requested for ${game?.name || pkg} · waiting for confirmation`, 'starting')
@@ -529,7 +528,7 @@ function Main() {
     const launch = await native.launchGame(pkg)
     const reason = hosted?.reason || hosted?.state || session?.error || launch?.error || 'external session'
     say(launch?.ok
-      ? `Session active · ${game?.name || pkg} opened externally · mod menu in SNAKE ENGINE (local preview)`
+      ? `Session active · ${game?.name || pkg} opened externally · in-window hosting unavailable (mod menu in SNAKE ENGINE)`
       : `Launch failed: ${reason}`,
     launch?.ok ? 'ready' : 'error')
     await refreshNativeStatus()

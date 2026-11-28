@@ -73,7 +73,7 @@ export default function Home({
         <div className="sg-hero-copy">
           <span className="sg-hero-kicker">LOCAL SESSION CLIENT</span>
           <SnakeLogo className="sg-hero-logo" />
-          <p>Opens the installed 8 Ball Pool · mod menu stays in this client · no key · no server</p>
+          <p>Tries in-window 8 Ball Pool with a floating mod menu · honest external fallback</p>
           <button className="sg-hero-btn" onClick={() => onStartSession(GAME_PACKAGES.eightBallPool)}>
             <Icon name="play" size={16} /> START SESSION
           </button>
