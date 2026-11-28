@@ -73,6 +73,26 @@ test('VM stages the APK read-only before classloading', () => {
   assert.ok(core.includes('new dalvik.system.DexClassLoader(\n                entry.apkPath'))
 })
 
+test('probe exposes real memory maps so no base address is guessed', () => {
+  const provider = read(vmDir + 'VMMemoryProvider.java')
+  const remote = read(vmDir + 'VMRemoteMemoryReader.java')
+  const calls = read(vmDir + 'SystemCallProvider.java')
+  const plugin = read('android/app/src/main/java/com/d0j/engine/D0JNativePlugin.java')
+  const nativeJs = read('src/lib/native.js')
+  const settings = read('src/screens/Settings.jsx')
+
+  assert.ok(provider.includes('"maps".equals(op)'))
+  assert.ok(provider.includes('readMaps('))
+  assert.ok(provider.includes('/proc/self/maps'))
+  assert.ok(remote.includes('public String maps()'))
+  assert.ok(calls.includes('"probeMaps".equals(op)'))
+  assert.ok(plugin.includes('public void vmMaps(PluginCall call)'))
+  assert.ok(nativeJs.includes('vmMaps:'))
+  assert.ok(settings.includes('Show memory bases'))
+  assert.ok(settings.includes('native.vmMaps()'))
+  assert.ok(settings.includes('Real readable regions — select a base'))
+})
+
 test('native bridge and Capacitor plugin expose VM calls', () => {
   const nativeJs = read('src/lib/native.js')
   const plugin = read('android/app/src/main/java/com/d0j/engine/D0JNativePlugin.java')

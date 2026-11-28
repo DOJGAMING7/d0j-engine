@@ -10,6 +10,8 @@ import android.os.Process;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.util.Map;
 
 /**
@@ -50,6 +52,10 @@ public final class VMMemoryProvider extends ContentProvider {
                 ensureReader();
                 requireReader();
                 out.putLong("base", reader.moduleBase(args.getString("name", "")));
+            } else if ("maps".equals(op)) {
+                ensureReader();
+                requireReader();
+                out.putString("maps", readMaps(args.getInt("limit", 120)));
             } else if ("readFloat".equals(op)) {
                 ensureReader();
                 requireReader();
@@ -97,6 +103,48 @@ public final class VMMemoryProvider extends ContentProvider {
             out.putString("message", e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage()));
         }
         return out;
+    }
+
+    /** Real /proc/self/maps regions from this hosted process. No addresses are guessed. */
+    private static String readMaps(int limit) throws Exception {
+        JSONArray array = new JSONArray();
+        BufferedReader reader = new BufferedReader(new FileReader("/proc/self/maps"));
+        try {
+            String line;
+            while ((line = reader.readLine()) != null && array.length() < limit) {
+                String[] parts = line.trim().split("\\s+");
+                if (parts.length < 2) continue;
+                String range = parts[0];
+                int dash = range.indexOf('-');
+                if (dash <= 0) continue;
+                String start = range.substring(0, dash);
+                String end = range.substring(dash + 1);
+                String perms = parts[1];
+                if (!perms.contains("r")) continue;
+                long size;
+                try {
+                    size = Long.parseUnsignedLong(end, 16) - Long.parseUnsignedLong(start, 16);
+                } catch (Exception ignored) {
+                    continue;
+                }
+                if (size < 4096) continue;
+                StringBuilder path = new StringBuilder();
+                for (int i = 5; i < parts.length; i++) {
+                    if (i > 5) path.append(' ');
+                    path.append(parts[i]);
+                }
+                JSONObject item = new JSONObject();
+                item.put("start", start);
+                item.put("end", end);
+                item.put("perms", perms);
+                item.put("size", size);
+                item.put("path", path.toString());
+                array.put(item);
+            }
+        } finally {
+            reader.close();
+        }
+        return array.toString();
     }
 
     private static void ensureReader() throws VMCore.VMException {

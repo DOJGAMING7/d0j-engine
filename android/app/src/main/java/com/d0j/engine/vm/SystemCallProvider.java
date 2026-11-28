@@ -14,6 +14,7 @@ import android.os.Bundle;
 
 import com.d0j.engine.D0JPrefs;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 /** IPC seam used by JS, the host UI and child processes: call("VM", ...). */
@@ -162,6 +163,21 @@ public class SystemCallProvider extends ContentProvider {
                 value.put("provider", current.name());
                 value.put("process", reader instanceof VMRemoteMemoryReader
                         ? ((VMRemoteMemoryReader) reader).process() : -1);
+                out.putString("json", value.toString());
+            } else if ("probeMaps".equals(op)) {
+                VMStateProvider current = VMStateHub.get();
+                VMMemoryReader reader = current instanceof VMProbeStateProvider
+                        ? ((VMProbeStateProvider) current).reader() : null;
+                JSONObject value = new JSONObject();
+                if (reader instanceof VMRemoteMemoryReader) {
+                    value.put("maps", new JSONArray(((VMRemoteMemoryReader) reader).maps()));
+                    value.put("state", "MAPS_READY");
+                    value.put("process", ((VMRemoteMemoryReader) reader).process());
+                } else {
+                    value.put("maps", new JSONArray());
+                    value.put("state", "NO_MEMORY_READER");
+                    value.put("reason", "SWITCH_TO_PROBE_FIRST_AND_ATTACH_READER");
+                }
                 out.putString("json", value.toString());
             } else if ("probeCapture".equals(op)) {
                 int samples = probe().capture(args.getString("label", "before"), args.getLong("base", 0),

@@ -56,6 +56,7 @@ export default function Settings({
   const [liveInfo, setLiveInfo] = useState(null)
   const [bindingInfo, setBindingInfo] = useState(null)
   const [probeInfo, setProbeInfo] = useState(null)
+  const [vmMaps, setVmMaps] = useState([])
   const [probeResult, setProbeResult] = useState(null)
   const [probeCopied, setProbeCopied] = useState(false)
   const [readerProcess, setReaderProcess] = useState('0')
@@ -93,6 +94,13 @@ export default function Settings({
     const res = await native.vmAttachReader(Number(readerProcess) || 0)
     setVmMsg(`Reader: ${res?.ready ? 'attached' : 'pending'} · process=:${res?.process ?? readerProcess} · ${res?.reason || res?.message || '—'}`)
     await refreshVm()
+  }
+
+  const loadMaps = async () => {
+    const res = await native.vmMaps().catch(e => ({ ok: false, reason: String(e?.message || e) }))
+    const maps = Array.isArray(res?.maps) ? res.maps : []
+    setVmMaps(maps)
+    setVmMsg(`Maps: ${res?.ok ? `${maps.length} real regions` : (res?.reason || res?.error || 'failed')}`)
   }
 
   const setProvider = async name => {
@@ -284,6 +292,24 @@ export default function Settings({
             <input value={readerProcess} placeholder="0" onChange={e => setReaderProcess(e.target.value)} />
             <button className="btn ghost" disabled={vmBusy} onClick={attachReader}>Attach Reader</button>
           </div>
+          <div className="btn-row">
+            <button className="btn ghost" disabled={vmBusy} onClick={loadMaps}>Show memory bases</button>
+          </div>
+          {vmMaps.length > 0 && (
+            <>
+              <label className="field-label">Real readable regions — select a base</label>
+              <div className="input-row">
+                <select className="probe-select" value={probeBase} onChange={e => setProbeBase(e.target.value)}>
+                  <option value="">Choose a region…</option>
+                  {vmMaps.map((region, index) => (
+                    <option key={`${region.start}-${index}`} value={region.start}>
+                      0x{region.start}–0x{region.end} · {region.perms} · {Math.round((region.size || 0) / 1024)}KB{region.path ? ` · ${region.path}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
           <label className="field-label">Probe window (hex base, bytes)</label>
           <div className="input-row">
             <input value={probeBase} placeholder="7a000000" onChange={e => setProbeBase(e.target.value)} />

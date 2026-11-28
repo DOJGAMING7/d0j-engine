@@ -386,6 +386,11 @@ public class D0JNativePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void vmMaps(PluginCall call) {
+        call.resolve(vmResult(vmCall("probeMaps", new Bundle())));
+    }
+
+    @PluginMethod
     public void setOverlayLines(PluginCall call) {
         Intent intent = new Intent(getContext(), D0JOverlayService.class)
                 .setAction(D0JOverlayService.ACTION_UPDATE_LINES)

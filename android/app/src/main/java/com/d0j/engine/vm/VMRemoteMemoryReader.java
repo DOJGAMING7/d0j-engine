@@ -72,6 +72,13 @@ public final class VMRemoteMemoryReader implements VMMemoryReader {
         return response.getLong("base", 0);
     }
 
+    /** JSON array of real readable regions in the selected hosted process. */
+    public String maps() {
+        Bundle response = call("maps", new Bundle());
+        check(response);
+        return response.getString("maps", "[]");
+    }
+
     @Override public float readFloat(long address) {
         Bundle args = new Bundle();
         args.putLong("address", address);
