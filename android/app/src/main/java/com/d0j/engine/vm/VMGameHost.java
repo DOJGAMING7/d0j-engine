@@ -2,8 +2,11 @@ package com.d0j.engine.vm;
 
 import android.app.Activity;
 import android.app.Application;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.ContextWrapper;
+import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
@@ -128,6 +131,7 @@ public final class VMGameHost {
             // against the wrong resource table.
             try { installInflater(activity, gameBase); } catch (Throwable ignored) { }
             try { installPackageInfo(activity, prepared); } catch (Throwable ignored) { }
+            try { installTheme(activity, prepared); } catch (Throwable ignored) { }
             VMHosting.markStage(report, "ACTIVITY_CONTEXT_SWAPPED");
             return true;
         } catch (Throwable e) {
@@ -150,6 +154,30 @@ public final class VMGameHost {
         VMCore core = VMCore.peek();
         if (core != null && core.context() != null) return core.context();
         return activity == null ? null : activity.getApplicationContext();
+    }
+
+    /** Apply the game's manifest theme so AppCompat finds its own theme attrs. */
+    private static void installTheme(Activity activity, Prepared prepared) throws Exception {
+        int theme = 0;
+        Intent intent = activity.getIntent();
+        String target = intent == null ? null : intent.getStringExtra("vmActivity");
+        try {
+            if (target != null && !target.trim().isEmpty()) {
+                ActivityInfo info = prepared.context.getPackageManager().getActivityInfo(
+                        new ComponentName(prepared.packageName, target), 0);
+                if (info != null) theme = info.theme;
+            }
+        } catch (Throwable ignored) { }
+        if (theme == 0) theme = prepared.info.theme;
+        if (theme != 0) {
+            // attach() already created a Theme from our resources; clear it so
+            // setTheme() rebuilds one from the game's resources.
+            try { setField(activity, "mTheme", null); } catch (Throwable ignored) { }
+            activity.setTheme(theme);
+            VMHosting.markStage(prepared.context, "THEME_APPLIED:" + theme);
+        } else {
+            VMHosting.markStage(prepared.context, "THEME_MISSING");
+        }
     }
 
     private static void installInflater(Activity activity, Context gameBase) throws Exception {

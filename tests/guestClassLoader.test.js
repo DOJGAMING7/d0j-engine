@@ -29,6 +29,17 @@ test('both prepare and launch use the guest-first loader', () => {
   assert.ok(core.includes('CLASSLOADER_GUEST_FIRST'))
 })
 
+test("the game's manifest theme is applied before onCreate", () => {
+  const host = read(vmDir + 'VMGameHost.java')
+  assert.match(host, /private static void installTheme\(Activity activity, Prepared prepared\)/)
+  assert.match(host, /getActivityInfo\(\s*new ComponentName\(prepared\.packageName, target\)/)
+  assert.match(host, /prepared\.info\.theme/)
+  assert.match(host, /setField\(activity, "mTheme", null\)/)
+  assert.match(host, /activity\.setTheme\(theme\)/)
+  assert.match(host, /THEME_APPLIED/)
+  assert.match(host, /installTheme\(activity, prepared\)/)
+})
+
 test('the game Application.onCreate is invoked before the Activity', () => {
   const host = read(vmDir + 'VMGameHost.java')
   assert.match(host, /getDeclaredMethod\("onCreate"\)/)
