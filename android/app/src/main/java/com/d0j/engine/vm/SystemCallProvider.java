@@ -73,6 +73,7 @@ public class SystemCallProvider extends ContentProvider {
                 value.put("stage", VMHosting.stage(getContext()));
                 value.put("disabled", VMHosting.isDisabled(getContext()));
                 value.put("reason", VMHosting.reason(getContext()));
+                value.put("error", VMHosting.error(getContext()));
                 putJson(out, value);
             } else if ("resetHosting".equals(op)) {
                 VMHosting.reset(getContext());

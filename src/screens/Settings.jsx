@@ -503,6 +503,7 @@ export default function Settings({
           </div>
           <div className="meta-line">{hostingMsg || 'Use after a hosting failure, before trying START SESSION again.'}</div>
           <div className="meta-line">Hosting stage: {hostingInfo?.stage || 'not attempted'}{hostingInfo?.disabled ? ` · disabled (${hostingInfo?.reason || 'unknown'})` : ''}</div>
+          {hostingInfo?.error ? <textarea className="probe-export" readOnly value={hostingInfo.error} /> : null}
         </section>
 
         <section className="panel">

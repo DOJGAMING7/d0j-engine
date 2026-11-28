@@ -1,0 +1,55 @@
+// Step 2b: the original hosting exception must be preserved and the framework
+// lifecycle flag satisfied, then the prepared game context must be installed
+// on the substituted Activity before its onCreate runs.
+
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const root = resolve(import.meta.dirname, '..')
+const read = relative => readFileSync(resolve(root, relative), 'utf8')
+const vmDir = 'android/app/src/main/java/com/d0j/engine/vm/'
+
+test('caught hosting failures keep the framework mCalled flag consistent', () => {
+  const hook = read(vmDir + 'HookInstrumentation.java')
+  assert.match(hook, /private static void markCalled\(Activity activity\)/)
+  assert.match(hook, /getDeclaredField\("mCalled"\)/)
+  assert.match(hook, /field\.setBoolean\(activity, true\)/)
+  assert.match(hook, /callActivityOnCreate[\s\S]*markCalled\(activity\)/)
+  assert.match(hook, /hostedLifecycleFailed[\s\S]*markCalled\(activity\)/)
+  assert.ok(hook.includes('SuperNotCalledException'), 'documents the framework check we satisfy')
+})
+
+test('the original exception is saved, not just logged', () => {
+  const hook = read(vmDir + 'HookInstrumentation.java')
+  assert.match(hook, /private static void saveHostingError\(Context context, String stage, Throwable error\)/)
+  assert.match(hook, /saveHostingError\(context, "callActivityOnCreate", e\)/)
+  assert.match(hook, /saveHostingError\(context, "lifecycle", e\)/)
+  assert.match(hook, /saveHostingError\(core\.context\(\), "newActivity", e\)/)
+
+  const hosting = read(vmDir + 'VMHosting.java')
+  assert.match(hosting, /ERROR_FILE = "vm_hosting_error\.txt"/)
+  assert.match(hosting, /markError\(Context context, String error\)/)
+  assert.match(hosting, /static String error\(Context context\)/)
+
+  const provider = read(vmDir + 'SystemCallProvider.java')
+  assert.ok(provider.includes('VMHosting.error(getContext())'))
+
+  const settings = read('src/screens/Settings.jsx')
+  assert.ok(settings.includes('hostingInfo?.error'))
+})
+
+test('prepared game context is installed on the Activity before onCreate', () => {
+  const hook = read(vmDir + 'HookInstrumentation.java')
+  assert.match(hook, /VMGameHost\.apply\(game, pkg\)/)
+  assert.match(hook, /if \(!VMGameHost\.apply\(game, pkg\)\)/)
+
+  const host = read(vmDir + 'VMGameHost.java')
+  assert.match(host, /public static boolean apply\(Activity activity, String packageName\)/)
+  assert.match(host, /setField\(activity, "mBase", prepared\.context\)/)
+  assert.match(host, /setField\(activity, "mResources", prepared\.resources\)/)
+  assert.match(host, /setField\(activity, "mApplication", prepared\.application\)/)
+  assert.match(host, /installPackageInfo\(activity, prepared\)/)
+  assert.match(host, /ACTIVITY_CONTEXT_SWAPPED/)
+})

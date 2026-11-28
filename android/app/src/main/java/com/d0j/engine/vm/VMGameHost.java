@@ -1,5 +1,6 @@
 package com.d0j.engine.vm;
 
+import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
 import android.content.ContextWrapper;
@@ -7,7 +8,10 @@ import android.content.pm.ApplicationInfo;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -63,6 +67,71 @@ public final class VMGameHost {
             VMHosting.markStage(host, stage);
             return null;
         }
+    }
+
+    /**
+     * Installs the prepared game context on a substituted Activity before
+     * Android calls its onCreate. Returns false when the swap cannot be done,
+     * so the caller can abandon substitution instead of running the game with
+     * our resources and causing a black screen or a lifecycle crash.
+     */
+    public static boolean apply(Activity activity, String packageName) {
+        Prepared prepared = get(packageName);
+        if (activity == null || prepared == null) {
+            VMHosting.markStage(activity, "ACTIVITY_SWAP_NO_PREPARED:" + packageName);
+            return false;
+        }
+        try {
+            VMHosting.markStage(activity, "ACTIVITY_SWAP_START");
+            setField(activity, "mBase", prepared.context);
+            setField(activity, "mResources", prepared.resources);
+            setField(activity, "mApplication", prepared.application);
+            try { installPackageInfo(activity, prepared); } catch (Throwable ignored) { }
+            VMHosting.markStage(activity, "ACTIVITY_CONTEXT_SWAPPED");
+            return true;
+        } catch (Throwable e) {
+            VMHosting.markStage(activity, "ACTIVITY_SWAP_FAIL:" + describe(e));
+            VMHosting.markError(activity, "ACTIVITY_SWAP_FAIL\n" + stack(e));
+            return false;
+        }
+    }
+
+    private static void installPackageInfo(Activity activity, Prepared prepared) throws Exception {
+        Class<?> threadClass = Class.forName("android.app.ActivityThread");
+        Method current = threadClass.getDeclaredMethod("currentActivityThread");
+        current.setAccessible(true);
+        Object thread = current.invoke(null);
+        Class<?> compatClass = Class.forName("android.content.res.CompatibilityInfo");
+        Field defaultCompat = compatClass.getDeclaredField("DEFAULT_COMPATIBILITY_INFO");
+        defaultCompat.setAccessible(true);
+        Method getInfo = threadClass.getDeclaredMethod(
+                "getPackageInfoNoCheck", ApplicationInfo.class, compatClass);
+        getInfo.setAccessible(true);
+        Object loaded = getInfo.invoke(thread, prepared.context.getApplicationInfo(), defaultCompat.get(null));
+        setField(activity, "mPackageInfo", loaded);
+    }
+
+    private static void setField(Object target, String name, Object value) throws Exception {
+        Class<?> type = target.getClass();
+        while (type != null) {
+            try {
+                Field field = type.getDeclaredField(name);
+                field.setAccessible(true);
+                field.set(target, value);
+                return;
+            } catch (NoSuchFieldException e) {
+                type = type.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(name);
+    }
+
+    private static String stack(Throwable error) {
+        StringWriter writer = new StringWriter();
+        PrintWriter out = new PrintWriter(writer);
+        error.printStackTrace(out);
+        out.flush();
+        return writer.toString();
     }
 
     private static Resources buildResources(Context host, String[] apkPaths, StringBuilder stages) throws Exception {

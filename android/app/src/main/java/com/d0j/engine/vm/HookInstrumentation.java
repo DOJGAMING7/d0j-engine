@@ -1,9 +1,11 @@
 package com.d0j.engine.vm;
 
 import android.app.Activity;
+import android.app.Application;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -11,10 +13,14 @@ import com.d0j.engine.D0JGameHud;
 import com.d0j.engine.D0JPrefs;
 import com.d0j.engine.D0JSessionService;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.reflect.Field;
+
 /**
  * Attempts to instantiate the real installed game Activity from our hosted
- * classloader. Any failure is contained: the app never dies for a game crash,
- * and the failure is persisted so START SESSION will not retry in a loop.
+ * classloader, with the game's own resources and application installed before
+ * onCreate. Any failure is contained and recorded with its original stack.
  */
 public final class HookInstrumentation extends Instrumentation {
     private static final String TAG = "D0JVM";
@@ -52,14 +58,22 @@ public final class HookInstrumentation extends Instrumentation {
                 if (redirected) {
                     ClassLoader loader = core.getLoader(pkg);
                     if (loader != null) {
+                        Activity game = null;
                         try {
-                            return (Activity) super.newActivity(loader, target, intent);
+                            game = (Activity) super.newActivity(loader, target, intent);
+                            if (!VMGameHost.apply(game, pkg)) {
+                                hostingFailed(core.context(), pkg, "ACTIVITY_SWAP_FAILED");
+                                game = null;
+                            }
                         } catch (ClassNotFoundException e) {
                             Log.w(TAG, "Game activity class missing: " + target, e);
+                            saveHostingError(core.context(), "newActivity", e);
                             hostingFailed(core.context(), pkg, "CLASS_MISSING: " + target);
                         } catch (Throwable e) {
+                            saveHostingError(core.context(), "newActivity", e);
                             hostingFailed(core.context(), pkg, "newActivity: " + e);
                         }
+                        if (game != null) return game;
                     } else {
                         hostingFailed(core.context(), pkg, "NO_GAME_LOADER: " + pkg);
                     }
@@ -81,6 +95,10 @@ public final class HookInstrumentation extends Instrumentation {
             Context context = core == null ? (activity == null ? null : activity.getApplicationContext()) : core.context();
             String pkg = intent == null ? null : intent.getStringExtra("vmPackage");
             Log.e(TAG, "Hosted activity onCreate failed: " + e, e);
+            saveHostingError(context, "callActivityOnCreate", e);
+            // Without this Android sees mCalled=false and throws
+            // SuperNotCalledException from performLaunchActivity.
+            markCalled(activity);
             if (gameHost) hostingFailed(context, pkg, "callActivityOnCreate: " + e);
             if (activity != null) {
                 try { activity.finish(); } catch (Throwable ignored) { }
@@ -146,8 +164,10 @@ public final class HookInstrumentation extends Instrumentation {
             throw new RuntimeException(e);
         }
         VMCore core = VMCore.peek();
-        hostingFailed(core == null ? (activity == null ? null : activity.getApplicationContext()) : core.context(),
-                intent.getStringExtra("vmPackage"), "lifecycle: " + e);
+        Context context = core == null ? null : core.context();
+        saveHostingError(context, "lifecycle", e);
+        markCalled(activity);
+        hostingFailed(context, intent.getStringExtra("vmPackage"), "lifecycle: " + e);
         Log.e(TAG, "Hosted lifecycle failed: " + e, e);
         try { activity.finish(); } catch (Throwable ignored) { }
     }
@@ -169,5 +189,39 @@ public final class HookInstrumentation extends Instrumentation {
         } catch (Throwable e) {
             Log.w(TAG, "Could not report hosting failure: " + e);
         }
+    }
+
+    /** Keep the framework lifecycle check satisfied after a contained failure. */
+    private static void markCalled(Activity activity) {
+        if (activity == null) return;
+        try {
+            Class<?> type = activity.getClass();
+            while (type != null) {
+                try {
+                    Field field = type.getDeclaredField("mCalled");
+                    field.setAccessible(true);
+                    field.setBoolean(activity, true);
+                    return;
+                } catch (NoSuchFieldException e) {
+                    type = type.getSuperclass();
+                }
+            }
+        } catch (Throwable ignored) { }
+    }
+
+    /** Save the original exception, not the follow-on SuperNotCalledException. */
+    private static void saveHostingError(Context context, String stage, Throwable error) {
+        try {
+            StringWriter writer = new StringWriter();
+            PrintWriter out = new PrintWriter(writer);
+            out.println("stage=" + stage);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                out.println("process=" + Application.getProcessName());
+            }
+            out.println("thread=" + Thread.currentThread().getName());
+            error.printStackTrace(out);
+            out.flush();
+            VMHosting.markError(context, writer.toString());
+        } catch (Throwable ignored) { }
     }
 }
